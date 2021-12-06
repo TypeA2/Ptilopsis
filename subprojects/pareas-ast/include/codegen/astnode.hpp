@@ -8,7 +8,7 @@
 
 #include "codegen/datatype.hpp"
 
-enum class NodeType {
+enum class NodeType : uint8_t {
     INVALID,
     STATEMENT_LIST,
     EMPTY_STAT,

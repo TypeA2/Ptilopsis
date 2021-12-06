@@ -3,7 +3,7 @@
 
 #include <iosfwd>
 
-enum class DataType {
+enum class DataType : uint8_t {
     INVALID,
     VOID,
     INT,
