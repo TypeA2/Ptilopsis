@@ -2,8 +2,9 @@
 #define _PAREAS_CODEGEN_DATATYPE_HPP
 
 #include <iosfwd>
+#include <cstdint>
 
-enum class DataType {
+enum class DataType : uint8_t {
     INVALID,
     VOID,
     INT,
