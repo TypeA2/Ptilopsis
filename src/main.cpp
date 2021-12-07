@@ -10,10 +10,12 @@
 #include <codegen/symtab.hpp>
 #include <codegen/treeproperties.hpp>
 
+#include "codegen/rv_generator.hpp"
+
 int main(int argc, char** argv) {
     if (argc != 2) {
-      std::cerr << "Please provide a single input file." << std::endl
-                << "usage: " << argv[0] << " <input-file>" << std::endl;
+      std::cerr << "Please provide a single input file.\n"
+                   "usage: " << argv[0] << " <input-file>\n";
       return EXIT_FAILURE;
     }
 
@@ -43,8 +45,10 @@ int main(int argc, char** argv) {
 
         /* Convert to an inverted tree */
         DepthTree depth_tree(node.get());
+        
+        rv_generator gen{ depth_tree };
 
-        /* Do something with it. */
+        gen.print(std::cout);
     }
     catch(const ParseException& e) {
         std::cerr << "Parse error: " << e.what() << std::endl;

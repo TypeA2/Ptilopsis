@@ -103,7 +103,7 @@ void DepthTree::print(std::ostream& os) const {
     for(size_t i = 0; i < this->filled_nodes; ++i) {
         os << "Node " << i << ", node type = " << static_cast<unsigned>(this->node_types[i]) << " (" << NODE_NAMES[this->node_types[i]] << ")"
             << ", data type = " << static_cast<unsigned>(this->resulting_types[i])
-            << ", parent = " << this->parents[i] << ", depth = " << this->depth[i] << std::endl;
+            << ", parent = " << this->parents[i] << ", depth = " << this->depth[i] << ", data = " << this->node_data[i] << std::endl;
     }
 }
 

@@ -1,0 +1,12 @@
+function foo(bar:int, baz:float) : int {
+    if (bar@float > baz) {
+        return 42.0;
+    } else {
+        return -12;
+    }
+}
+
+function main() : int {
+    foo(18, 38.3);
+    return 0;
+}

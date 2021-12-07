@@ -52,6 +52,9 @@ class DepthTree {
         inline size_t maxDepth() const {
             return this->max_depth;
         }
+        inline size_t filledNodes() const {
+            return this->filled_nodes;
+        }
 };
 
 std::ostream& operator<<(std::ostream&, const DepthTree&);

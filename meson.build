@@ -14,6 +14,7 @@ pareast_proj = subproject('pareas-ast', default_options: ['warning_level=0'])
 libpareas_ast_dep = pareast_proj.get_variable('libpareas_ast_dep')
 
 sources = [
+    'src/codegen/rv_generator.cpp',
     'src/main.cpp'
 ]
 
