@@ -14,9 +14,10 @@
 				"revealProblems": "onProblem",
 				"close": true
 			},
-			"problemMatcher": [
-				"$gcc"
-			],
+			"problemMatcher": {
+				"base": "$gcc",
+				"fileLocation": "absolute"
+			},
 			"label": "Meson: Build all targets"
 		}
 	]

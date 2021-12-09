@@ -3,7 +3,7 @@ project(
     ['c', 'cpp'],
     version: '1.0.0',
     default_options: [
-        'cpp_std=gnu++20',
+        'cpp_std=c++20',
         'warning_level=3',
         'buildtype=release',
     ]
@@ -36,5 +36,12 @@ executable(
 
 executable(
     'prefix_sum',
-    [ 'benchmarks/prefix_sum.cpp' ]
+    [ 'benchmarks/prefix_sum.cpp' ],
+    include_directories: includes
+)
+
+executable(
+    'test_shifts',
+    [ 'benchmarks/test_shifts.cpp' ],
+    include_directories: includes
 )
