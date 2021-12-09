@@ -71,7 +71,10 @@
 			"__nullptr": "cpp",
 			"map": "cpp",
 			"set": "cpp",
-			"span": "cpp"
-		}
+			"span": "cpp",
+			"ranges": "cpp"
+		},
+		"mesonbuild.buildFolder": "build",
+		"terminal.integrated.showExitAlert": false
 	}
 }

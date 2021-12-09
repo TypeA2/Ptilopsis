@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <iosfwd>
 #include <unordered_map>
+#include <span>
 
 class ASTNode;
 
@@ -28,23 +29,23 @@ class DepthTree {
 
         void print(std::ostream&) const;
 
-        inline const uint8_t* getNodeTypes() const {
-            return this->node_types;
+        inline std::span<const uint8_t> getNodeTypes() const {
+            return { this->node_types, filled_nodes };
         }
-        inline const uint8_t* getResultingTypes() const {
-            return this->resulting_types;
+        inline std::span<const uint8_t> getResultingTypes() const {
+            return { this->resulting_types, filled_nodes };
         }
-        inline const int32_t* getParents() const {
-            return this->parents;
+        inline std::span<const int32_t> getParents() const {
+            return { this->parents, filled_nodes };
         }
-        inline const int32_t* getDepth() const {
-            return this->depth;
+        inline std::span<const int32_t> getDepth() const {
+            return { this->depth, filled_nodes };
         }
-        inline const int32_t* getChildren() const {
-            return this->child_idx;
+        inline std::span<const int32_t> getChildren() const {
+            return { this->child_idx, filled_nodes };
         }
-        inline const uint32_t* getNodeData() const {
-            return this->node_data;
+        inline std::span<const uint32_t> getNodeData() const {
+            return { this->node_data, filled_nodes };
         }
         inline size_t maxNodes() const {
             return this->max_nodes;

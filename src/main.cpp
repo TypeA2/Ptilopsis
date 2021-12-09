@@ -48,6 +48,7 @@ int main(int argc, char** argv) {
         
         rv_generator gen{ depth_tree };
 
+        node->print(std::cout);
         gen.print(std::cout);
     }
     catch(const ParseException& e) {

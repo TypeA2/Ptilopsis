@@ -2,7 +2,7 @@
 #define PTILOPSIS_RV_GENERATOR_HPP
 
 #include <span>
-#include <vector>
+#include <memory>
 #include <thread>
 #include <ostream>
 
@@ -10,14 +10,23 @@
 
 /* Utility vector to automatically swap 2 buffers */
 template <typename T>
-class swap_vector {
-    std::vector<T> vec1;
-    std::vector<T> vec2;
+class swap_buffer {
+    size_t _size;
+    std::unique_ptr<T[]> vec1;
+    std::unique_ptr<T[]> vec2;
     bool active = false;
 
     public:
-    swap_vector() = delete;
-    swap_vector(size_t size) : vec1(size), vec2(size) { }
+    swap_buffer() = delete;
+    swap_buffer(size_t size)
+        : _size{ size }
+        /* Align to 64 bytes, for theoretical AVX-512 support */
+        , vec1{ new (std::align_val_t{64}) T[_size] }
+        , vec2{ new (std::align_val_t{64}) T[_size] } { }
+
+    size_t size() const {
+        return _size;
+    }
 
     void swap() {
         active = !active;
@@ -31,7 +40,7 @@ class swap_vector {
         return active ? vec2 : vec1;
     }
 
-    std::vector<T>* operator->() {
+    std::unique_ptr<T[]>* operator->() {
         return &cur();
     }
 
@@ -58,12 +67,12 @@ class DepthTree;
 class rv_generator {
     size_t nodes;
 
-    swap_vector<uint8_t> node_types;
-    swap_vector<uint8_t> result_types;
-    swap_vector<int32_t> parents;
-    swap_vector<int32_t> depth;
-    swap_vector<int32_t> child_idx;
-    swap_vector<uint32_t> node_data;
+    swap_buffer<uint8_t> node_types;
+    swap_buffer<uint8_t> result_types;
+    swap_buffer<int32_t> parents;
+    swap_buffer<int32_t> depth;
+    swap_buffer<int32_t> child_idx;
+    swap_buffer<uint32_t> node_data;
     public:
     rv_generator(const DepthTree& tree);
 
