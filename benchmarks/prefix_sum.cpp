@@ -11,8 +11,8 @@
 #include "utils.hpp"
 
 constexpr uint64_t seed = 0xC0FFEEA4DBEEF;
-constexpr size_t input_size = 768;
-constexpr size_t iterations = 1e6;
+constexpr size_t input_size = 8192;
+constexpr size_t iterations = 1e5;
 
 using dataset = std::array<uint32_t, input_size>;
 using std::chrono::steady_clock;
@@ -120,10 +120,10 @@ int main() {
     }
 
     {
-        std::cerr << "Benchmarking: AVX...  ";
+        std::cerr << "Benchmarking: SSE...  ";
 
-        steady_clock::duration avx_time;
-        AVX_ALIGNED dataset avx{};
+        steady_clock::duration sse_time;
+        AVX_ALIGNED dataset sse{};
         auto begin = steady_clock::now();
         for (volatile size_t i = 0; i < iterations;) {
 
@@ -150,7 +150,7 @@ int main() {
                 prev = _mm_srli_si128(x, 12);
 
                 //if (remaining == 4) {
-                    _mm_store_si128(reinterpret_cast<__m128i*>(avx.data() + j), x);
+                    _mm_store_si128(reinterpret_cast<__m128i*>(sse.data() + j), x);
 
                     
                 // } else {
@@ -160,19 +160,84 @@ int main() {
                 //     }
 
                 //     __m128i mask = _mm_load_si128(reinterpret_cast<__m128i*>(mask_template.data()));
-                //     _mm_maskstore_epi32(reinterpret_cast<int*>(avx.data()) + j, mask, x);
+                //     _mm_maskstore_epi32(reinterpret_cast<int*>(sse.data()) + j, mask, x);
                 // }
             }
 
             i = i + 1;
         }
-        avx_time = steady_clock::now() - begin;
+        sse_time = steady_clock::now() - begin;
 
-        if (avx != stl) {
+        if (sse != stl) {
             std::cerr << "INCORRECT, took ";
         }
 
-        std::cerr << avx_time << '\n';
+        std::cerr << sse_time << '\n';
+    }
+    
+    {
+        std::cerr << "Benchmarking: SSE alternative 1... ";
+
+        steady_clock::duration sse_alt_time;
+        AVX_ALIGNED dataset sse_alt;
+        auto begin = steady_clock::now();
+        for (volatile size_t i = 0; i < iterations;) {
+            // https://stackoverflow.com/a/19519287/8662472
+            __m128i offset = _mm_setzero_si128();
+            for (size_t j = 0; j < input_size; j += 4) {
+                __m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(input.data() + j));
+                x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+                x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+                x = _mm_add_epi32(x, offset);
+                offset = _mm_shuffle_epi32(x, 0b11'11'11'11);
+                _mm_store_si128(reinterpret_cast<__m128i*>(sse_alt.data() + j), x);
+            }
+            i = i + 1;
+        }
+        sse_alt_time = steady_clock::now() - begin;
+
+        if (sse_alt != stl) {
+            std::cerr << "INCORRECT, took ";
+        }
+
+        std::cerr << sse_alt_time << '\n';
+    }
+
+    {
+        std::cerr << "Benchmarking: AVX alternative 1... ";
+
+        steady_clock::duration avx_alt_time;
+        AVX_ALIGNED dataset avx_alt;
+        auto begin = steady_clock::now();
+        for (volatile size_t i = 0; i < iterations;) {
+            // https://stackoverflow.com/a/19519287/8662472
+            __m256i offset = _mm256_setzero_si256();
+            for (size_t j = 0; j < input_size; j += 8) {
+                __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(input.data() + j));
+                x = _mm256_add_epi32(x, _mm256_slli_si256_dual<4>(x));
+                x = _mm256_add_epi32(x, _mm256_slli_si256_dual<8>(x));
+                x = _mm256_add_epi32(x, _mm256_slli_si256_dual<16>(x));
+                x = _mm256_add_epi32(x, offset);
+                /* Copy upper half to lower half */
+                __m256i tmp = _mm256_permute2x128_si256(x, x, 0b0'001'0'001);
+                offset = _mm256_shuffle_epi32(tmp, 0b11'11'11'11);
+                _mm256_store_si256(reinterpret_cast<__m256i*>(avx_alt.data() + j), x);
+                //__m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(input.data() + j));
+                //x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+                //x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+                //x = _mm_add_epi32(x, offset);
+                //offset = _mm_shuffle_epi32(x, 0b11'11'11'11);
+                //_mm_store_si128(reinterpret_cast<__m128i*>(avx_alt.data() + j), x);
+            }
+            i = i + 1;
+        }
+        avx_alt_time = steady_clock::now() - begin;
+
+        if (avx_alt != stl) {
+            std::cerr << "INCORRECT, took ";
+        }
+
+        std::cerr << avx_alt_time << '\n';
     }
 
     return 1;
