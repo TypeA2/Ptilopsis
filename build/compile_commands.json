@@ -115,7 +115,7 @@
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Iprefix_sum.p -I. -I.. -I../include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Wextra -Wpedantic -std=c++20 -g -mavx2 -MD -MQ prefix_sum.p/benchmarks_prefix_sum.cpp.o -MF prefix_sum.p/benchmarks_prefix_sum.cpp.o.d -o prefix_sum.p/benchmarks_prefix_sum.cpp.o -c ../benchmarks/prefix_sum.cpp",
+    "command": "c++ -Iprefix_sum.p -I. -I.. -I../include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Wextra -Wpedantic -std=c++20 -g -mavx2 -pthread -MD -MQ prefix_sum.p/benchmarks_prefix_sum.cpp.o -MF prefix_sum.p/benchmarks_prefix_sum.cpp.o.d -o prefix_sum.p/benchmarks_prefix_sum.cpp.o -c ../benchmarks/prefix_sum.cpp",
     "file": "../benchmarks/prefix_sum.cpp",
     "output": "prefix_sum.p/benchmarks_prefix_sum.cpp.o"
   },

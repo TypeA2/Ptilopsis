@@ -17,6 +17,7 @@ add_project_arguments(
 # Use static lib version of pareas-ast as dependency
 pareast_proj = subproject('pareas-ast', default_options: ['warning_level=0'])
 libpareas_ast_dep = pareast_proj.get_variable('libpareas_ast_dep')
+threads_dep = dependency('threads')
 
 sources = [
     'src/codegen/rv_generator.cpp',
@@ -37,6 +38,7 @@ executable(
 executable(
     'prefix_sum',
     [ 'benchmarks/prefix_sum.cpp' ],
+    dependencies: threads_dep,
     include_directories: includes
 )
 

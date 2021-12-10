@@ -6,21 +6,24 @@
 #include <iomanip>
 #include <span>
 #include <concepts>
+#include <thread>
+#include <vector>
+#include <atomic>
 
 #include "simd.hpp"
 #include "utils.hpp"
 
 constexpr uint64_t seed = 0xC0FFEEA4DBEEF;
-constexpr size_t input_size = 8192;
+constexpr size_t input_size = 131072;
 constexpr size_t iterations = 1e5;
 
 using dataset = std::array<uint32_t, input_size>;
 using std::chrono::steady_clock;
 
-template <std::unsigned_integral Int, size_t Count>
-inline std::ostream& operator<<(std::ostream& os, const std::array<Int, Count>& vec) {
+template <size_t Count>
+inline std::ostream& operator<<(std::ostream& os, const std::array<uint32_t, Count>& vec) {
     for (const auto& v : vec) {
-        os << std::setw(3) << static_cast<uint32_t>(v) << ' ';
+        os << std::setw(3) << v << ' ';
     }
 
     return os;
@@ -32,7 +35,7 @@ int main() {
     std::uniform_int_distribution<uint8_t> gen{ 0, 255 };
     std::generate_n(input.begin(), input_size, [&]{ return gen(rnd); });
 
-    dataset stl;
+    dataset stl{};
     {
         std::cerr << "Benchmarking: STL...  ";
         steady_clock::duration stl_time;
@@ -179,7 +182,7 @@ int main() {
         std::cerr << "Benchmarking: SSE alternative 1... ";
 
         steady_clock::duration sse_alt_time;
-        AVX_ALIGNED dataset sse_alt;
+        AVX_ALIGNED dataset sse_alt{};
         auto begin = steady_clock::now();
         for (volatile size_t i = 0; i < iterations;) {
             // https://stackoverflow.com/a/19519287/8662472
@@ -207,7 +210,7 @@ int main() {
         std::cerr << "Benchmarking: AVX alternative 1... ";
 
         steady_clock::duration avx_alt_time;
-        AVX_ALIGNED dataset avx_alt;
+        AVX_ALIGNED dataset avx_alt{};
         auto begin = steady_clock::now();
         for (volatile size_t i = 0; i < iterations;) {
             // https://stackoverflow.com/a/19519287/8662472
@@ -222,12 +225,6 @@ int main() {
                 __m256i tmp = _mm256_permute2x128_si256(x, x, 0b0'001'0'001);
                 offset = _mm256_shuffle_epi32(tmp, 0b11'11'11'11);
                 _mm256_store_si256(reinterpret_cast<__m256i*>(avx_alt.data() + j), x);
-                //__m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(input.data() + j));
-                //x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
-                //x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
-                //x = _mm_add_epi32(x, offset);
-                //offset = _mm_shuffle_epi32(x, 0b11'11'11'11);
-                //_mm_store_si128(reinterpret_cast<__m128i*>(avx_alt.data() + j), x);
             }
             i = i + 1;
         }
@@ -238,6 +235,109 @@ int main() {
         }
 
         std::cerr << avx_alt_time << '\n';
+    }
+
+    {
+        std::cerr << "Benchmarking: Multithreaded scalar 1... ";
+        size_t thread_count = 23;//std::min<size_t>(std::thread::hardware_concurrency(), input_size);
+        size_t partition_size = ((input_size + thread_count) / thread_count);
+
+        std::vector<std::thread> threads;
+        threads.reserve(thread_count);
+
+        steady_clock::duration time;
+        AVX_ALIGNED dataset result{};
+
+        std::atomic_size_t idle = 0;
+        std::atomic_flag wait;
+        std::atomic_size_t done = 0;
+
+        std::atomic_bool end = false;
+        std::atomic_size_t sync1 = 0;
+        std::vector<uint32_t> sums;
+
+        sums.resize(thread_count);
+        for (size_t i = 0; i < thread_count; ++i) {
+            threads.emplace_back([&, i=i] {
+                size_t start_offset = i * partition_size;
+                size_t past_the_end = std::min<size_t>(start_offset + partition_size, input_size);
+
+                idle += 1;
+
+                while (end == false) {
+                    // Wait for owner to reset
+                    while (done.load(std::memory_order_relaxed) != 0) {
+                        __builtin_ia32_pause();
+                    }
+                    wait.wait(false);
+
+                    /* First pass */
+                    result[start_offset] = input[start_offset];
+                    for (size_t j = start_offset + 1; j < past_the_end; ++j) {
+                        result[j] = result[j - 1] + input[j];
+                    }
+
+                    sums[i] = result[past_the_end - 1];
+
+                    sync1 += 1;
+                    while (sync1.load(std::memory_order_relaxed) < thread_count) {
+                        __builtin_ia32_pause();
+                    }
+
+                    uint32_t our_sum = 0;
+                    for (size_t j = 0; j < i; ++j) {
+                        our_sum += sums[j];
+                    }
+
+                    for (size_t j = start_offset; j < past_the_end; ++j) {
+                        result[j] += our_sum;
+                    }
+
+                    done += 1;
+                }
+            });
+        }
+
+        /* Wait for all threads to start */
+        while (idle.load(std::memory_order_relaxed) != thread_count) {
+            __builtin_ia32_pause();
+        }
+
+        auto begin = steady_clock::now();
+        for (volatile size_t i = 0; i < iterations;) {
+            if (i == (iterations - 1)) {
+                end = true;
+            }
+            
+            // Start all threads
+            wait.test_and_set();
+            wait.notify_all();
+
+            // All are done and waiting again
+            while (done.load(std::memory_order_relaxed) < thread_count) {
+                __builtin_ia32_pause();
+            }
+            
+            wait.clear();
+            done = 0;
+            sync1 = 0;
+            sums = {};
+
+            i = i + 1;
+        }
+        
+        time = steady_clock::now() - begin;
+
+        for (auto& th : threads) {
+            th.join();
+        }
+        threads.clear();
+        
+        if (result != stl) {
+            std::cerr << "INCORRECT, took ";
+        }
+
+        std::cerr << time << '\n';
     }
 
     return 1;
