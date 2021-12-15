@@ -6,6 +6,7 @@
 #define FORCE_INLINE inline __attribute__((__always_inline__))
 
 /* Align for potential AVX-512 usage */
+#define AVX_ALIGNMENT 64
 #define AVX_ALIGNED alignas(64)
 
 /* _mm256_slli_si256 operates on 2 128-bit lanes. This emulates a full-width
