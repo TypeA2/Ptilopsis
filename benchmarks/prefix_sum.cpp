@@ -37,9 +37,19 @@ constexpr size_t value_limit = std::numeric_limits<uint32_t>::max() / input_size
  */
 static size_t thread_count = std::min<size_t>(std::thread::hardware_concurrency() - 1, input_size);
 
+constexpr auto divide_and_round_up(std::integral auto n, std::integral auto d) {
+    return (n + d - 1) / d;
+}
+
+constexpr auto round_up_to_multiple(std::integral auto n, std::integral auto m) {
+    return ((n + m - 1) / m) * m;
+}
+
 /* Amount of elements processed by each thread.  */
-static size_t partition_size = ((input_size + thread_count) / thread_count);
-static size_t partition_size_add1 = ((input_size + (thread_count + 1)) / (thread_count + 1));
+static size_t partition_size = divide_and_round_up(input_size, thread_count);
+static size_t partition_size_add1 = divide_and_round_up(input_size, thread_count + 1);
+static size_t partition_size_align4 = round_up_to_multiple(partition_size, 4);
+static size_t partition_size_align8 = round_up_to_multiple(partition_size, 8);
 
 static_assert((input_size & 0xF) == 0, "input size must be a multiple of 16 (AVX-512-support)");
 
@@ -148,8 +158,10 @@ static tester setup(int argc, char** argv) {
                 auto val = std::stol(optarg);
                 if (val > 0) {
                     thread_count = std::min<size_t>(val, input_size);
-                    partition_size = ((input_size + thread_count) / thread_count);
-                    partition_size_add1 = ((input_size + (thread_count + 1)) / (thread_count + 1));
+                    partition_size = divide_and_round_up(input_size, thread_count);
+                    partition_size_add1 = divide_and_round_up(input_size, thread_count + 1);
+                    partition_size_align4 = round_up_to_multiple(partition_size, 4);
+                    partition_size_align8 = round_up_to_multiple(partition_size, 8);
                 }
                 break;
             }
@@ -163,7 +175,9 @@ static tester setup(int argc, char** argv) {
                  "Thread count:       " << std::thread::hardware_concurrency()
                     << " (" << thread_count << " used by operations)\n"
                  "Partition size:     " << partition_size << "\n"
-                 "Partition size alt: " << partition_size_add1 << "\n";
+                 "Partition size alt: " << partition_size_add1 << "\n"
+                 "Partition size (4): " << partition_size_align4 << "\n"
+                 "Partition size (8): " << partition_size_align8 << "\n";
 
     std::cerr << "\nGenerating values...    ";
     auto input = make_dataset();
@@ -214,7 +228,7 @@ void basic_sse(tester& test) {
             x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
             x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
 
-            /* Add offset (last value of previous iteration) as an offsett */
+            /* Add offset (last value of previous iteration) as an offset */
             x = _mm_add_epi32(x, offset);
 
             /* Copy the highest value over to all other elements to c reate an offset */
@@ -796,6 +810,289 @@ void optimized_multithreaded_acc(tester& test) {
     test("Multi Scalar 4 (shift; a+p)", state);
 }
 
+void optimized_multithreaded_sse(tester& test) {
+    /* Multithreaded SSE prefix+offset */
+    struct mt_state {
+        std::vector<std::thread> threads;
+        std::vector<uint32_t> sums;
+
+        /* Used to signal the start of an iteration for testing */
+        atomic_barrier wait_start = true;
+
+        /* Used to synchronize startup of all threads */
+        counting_barrier start_sync = 0;
+
+        /* Tells all threads to stop */
+        std::atomic_bool end = false;
+
+        /* Synchronizes all threads between the 2 passes */
+        counting_barrier sync = 0;
+
+        /* Used to wait for all threads to finish 1 iteration */
+        counting_barrier done = 0;
+
+        /* Pointers for communicating in- and output */
+        std::span<const uint32_t>* input_ptr = nullptr;
+        std::span<uint32_t>* output_ptr = nullptr;
+
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
+            input_ptr = &input;
+            output_ptr = &output;
+
+            /* Start processing */
+            wait_start.unlock();
+
+            /* Wait for all threads to finish */
+            done.wait_for(thread_count);
+
+            /* Reset state */
+            input_ptr = nullptr;
+            output_ptr = nullptr;
+            
+            /* wait_start was already reset by thread 0 */
+            start_sync = 0;
+            sync = 0;
+            done = 0;
+        }
+
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
+
+            for (auto& th : threads) {
+                th.join();
+            }
+        }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size_align4;
+
+                    /* Past-the-end index of the range of elements this thread will process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size_align4, input_size);
+
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+                        
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        __m128i offset = _mm_setzero_si128();
+                        /* 4 integers at a time */
+                        for (size_t j = start_offset; j < end_offset; j += 4) {
+                            __m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(input.data() + j));
+
+                            /* Calculate the local prefix sum */
+                            x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+                            x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+
+                            /* Add offset from previous iteration */
+                            x = _mm_add_epi32(x, offset);
+
+                            /* Re-calculate offset for next iteration */
+                            offset = _mm_shuffle_epi32(x, 0b11'11'11'11);
+
+                            /* Store in destination */
+                            _mm_store_si128(reinterpret_cast<__m128i*>(output.data() + j), x);
+                        }
+
+                        /* The offset contains the last value of the last iteration. This is our total sum */
+                        sums[i] = _mm_extract_epi32(offset, 0);
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        /* Calculate local sum */
+                        uint32_t local_sum = 0;
+                        for (size_t j = 0; j < i; ++j) {
+                            local_sum += sums[j];
+                        }
+
+                        offset = _mm_set1_epi32(local_sum);
+
+                        /* Add local sum to every element */
+                        for (size_t j = start_offset; j < end_offset; j += 4) {
+                            __m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(output.data() + j));
+                            x = _mm_add_epi32(x, offset);
+                            _mm_store_si128(reinterpret_cast<__m128i*>(output.data() + j), x);
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi SSE 1", state);
+}
+
+void optimized_multithreaded_avx(tester& test) {
+    /* Multithreaded AVX prefix+offset */
+    struct mt_state {
+        std::vector<std::thread> threads;
+        std::vector<uint32_t> sums;
+
+        /* Used to signal the start of an iteration for testing */
+        atomic_barrier wait_start = true;
+
+        /* Used to synchronize startup of all threads */
+        counting_barrier start_sync = 0;
+
+        /* Tells all threads to stop */
+        std::atomic_bool end = false;
+
+        /* Synchronizes all threads between the 2 passes */
+        counting_barrier sync = 0;
+
+        /* Used to wait for all threads to finish 1 iteration */
+        counting_barrier done = 0;
+
+        /* Pointers for communicating in- and output */
+        std::span<const uint32_t>* input_ptr = nullptr;
+        std::span<uint32_t>* output_ptr = nullptr;
+
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
+            input_ptr = &input;
+            output_ptr = &output;
+
+            /* Start processing */
+            wait_start.unlock();
+
+            /* Wait for all threads to finish */
+            done.wait_for(thread_count);
+
+            /* Reset state */
+            input_ptr = nullptr;
+            output_ptr = nullptr;
+            
+            /* wait_start was already reset by thread 0 */
+            start_sync = 0;
+            sync = 0;
+            done = 0;
+        }
+
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
+
+            for (auto& th : threads) {
+                th.join();
+            }
+        }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size_align8;
+
+                    /* Past-the-end index of the range of elements this thread will process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size_align8, input_size);
+
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+                        
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        __m256i offset = _mm256_setzero_si256();
+                        /* 4 integers at a time */
+                        for (size_t j = start_offset; j < end_offset; j += 8) {
+                            __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(input.data() + j));
+
+                            /* Calculate the local prefix sum */
+                            x = _mm256_add_epi32(x, _mm256_slli_si256_dual<4>(x));
+                            x = _mm256_add_epi32(x, _mm256_slli_si256_dual<8>(x));
+                            x = _mm256_add_epi32(x, _mm256_slli_si256_dual<16>(x));
+
+                            /* Add offset from previous iteration */
+                            x = _mm256_add_epi32(x, offset);
+
+                            /* Copy uppper half to lower half */
+                            offset = _mm256_permute2x128_si256(x, x, 0b0'001'0'001);
+
+                            /* Of each half, copper last value to all other positions */
+                            offset = _mm256_shuffle_epi32(offset, 0b11'11'11'11);
+
+                            /* Store in destination */
+                            _mm256_store_si256(reinterpret_cast<__m256i*>(output.data() + j), x);
+                        }
+
+                        /* The offset contains the last value of the last iteration. This is our total sum */
+                        sums[i] = _mm256_extract_epi32(offset, 0);
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        /* Calculate local sum */
+                        uint32_t local_sum = 0;
+                        for (size_t j = 0; j < i; ++j) {
+                            local_sum += sums[j];
+                        }
+
+                        offset = _mm256_set1_epi32(local_sum);
+
+                        /* Add local sum to every element */
+                        for (size_t j = start_offset; j < end_offset; j += 8) {
+                            __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(output.data() + j));
+                            x = _mm256_add_epi32(x, offset);
+                            _mm256_store_si256(reinterpret_cast<__m256i*>(output.data() + j), x);
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi AVX 1", state);
+}
 
 static void(*tests[])(tester&) {
     scalar,
@@ -805,6 +1102,8 @@ static void(*tests[])(tester&) {
     basic_multithreaded_acc,
     optimized_multithreaded_no_acc,
     optimized_multithreaded_acc,
+    optimized_multithreaded_sse,
+    optimized_multithreaded_avx,
 };
 
 void cpuid_dump() {
