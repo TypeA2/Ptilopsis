@@ -6,9 +6,10 @@
 
 #define USE_PAUSE
 
-#ifdef USE_PASUSE
+#ifdef USE_PAUSE
 # define MAYBE_PAUSE() __builtin_ia32_pause()
 #else
+# warning "Not using PAUSE instruction"
 # define MAYBE_PAUSE()
 #endif
 
@@ -45,8 +46,7 @@ class atomic_barrier {
     std::atomic_bool should_wait;
 
     public:
-    atomic_barrier() = delete;
-    atomic_barrier(bool should_wait) : should_wait{ should_wait } { }
+    atomic_barrier(bool should_wait = false) : should_wait{ should_wait } { }
     
     void wait() noexcept {
         for (;;) {
@@ -104,6 +104,10 @@ class counting_barrier {
     counting_barrier& operator-=(size_t v) noexcept {
         count -= v;
         return *this;
+    }
+
+    size_t value() const noexcept {
+        return count.load(std::memory_order_relaxed);
     }
 };
 

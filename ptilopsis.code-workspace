@@ -72,7 +72,12 @@
 			"map": "cpp",
 			"set": "cpp",
 			"span": "cpp",
-			"ranges": "cpp"
+			"ranges": "cpp",
+			"__mutex_base": "cpp",
+			"barrier": "cpp",
+			"latch": "cpp",
+			"__atomic": "cpp",
+			"variant": "cpp"
 		},
 		"mesonbuild.buildFolder": "build",
 		"terminal.integrated.showExitAlert": false

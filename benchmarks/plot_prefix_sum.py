@@ -33,4 +33,8 @@ ax.set_xlabel("Iteration")
 ax.set_ylabel("Time (ns)")
 ax.set_xlim([0, None])
 ax.set_ylim([0, None])
-plt.show()
+
+if len(sys.argv) > 1:
+    fig.savefig(sys.argv[1])
+else:
+    plt.show()

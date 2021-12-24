@@ -13,10 +13,17 @@
 #include <ranges>
 #include <iterator>
 #include <cstring>
+#include <bitset>
+#include <functional>
+#include <mutex>
+
+#include <cpuid.h>
 
 #include "simd.hpp"
 #include "threading.hpp"
 #include "utils.hpp"
+
+constexpr size_t cache_line_size = 64;
 
 constexpr uint64_t seed = 0xC0FFEEA4DBEEF;
 constexpr size_t input_size = 1024*1024;
@@ -28,10 +35,11 @@ constexpr size_t value_limit = std::numeric_limits<uint32_t>::max() / input_size
 /* Every thread handles at least 1 element.
  * 1 thread remains free to prevent starvation from the main thread
  */
-static const size_t thread_count = std::min<size_t>(std::thread::hardware_concurrency() / 2, input_size);
+static size_t thread_count = std::min<size_t>(std::thread::hardware_concurrency() - 1, input_size);
 
 /* Amount of elements processed by each thread.  */
-static const size_t partition_size = ((input_size + thread_count) / thread_count);
+static size_t partition_size = ((input_size + thread_count) / thread_count);
+static size_t partition_size_add1 = ((input_size + (thread_count + 1)) / (thread_count + 1));
 
 static_assert((input_size & 0xF) == 0, "input size must be a multiple of 16 (AVX-512-support)");
 
@@ -51,6 +59,12 @@ std::unique_ptr<uint32_t[]> make_dataset() {
     return std::unique_ptr<uint32_t[]>{ new (std::align_val_t{AVX_ALIGNMENT}) uint32_t[input_size] };
 }
 
+template <typename T>
+concept test_func = std::invocable<T, std::span<const uint32_t>, std::span<uint32_t>>;
+
+template <typename T, typename U>
+concept complex_test_func = std::invocable<T, U&, std::span<const uint32_t>, std::span<uint32_t>>;
+
 class tester {
     bool plot;
     std::unique_ptr<uint32_t[]> input;
@@ -61,8 +75,9 @@ class tester {
     tester(bool plot, std::unique_ptr<uint32_t[]> input, std::unique_ptr<uint32_t[]>reference)
         : plot{ plot }, input{ std::move(input) }, reference{ std::move(reference) } { }
 
-    template <std::invocable<std::span<const uint32_t>, std::span<uint32_t>> Func>
-    void operator()(std::string_view name, Func&& f) {
+    /* Test simple algorithms */
+    void operator()(std::string_view name, test_func auto&& f) const {
+        /* Algorithms will write to this */
         auto output = make_dataset();
 
         std::cerr << std::setw(32) << std::left << name << ' ';
@@ -70,26 +85,11 @@ class tester {
         std::vector<std::chrono::nanoseconds> times(repeats);
 
         for (size_t i = 0; i < repeats; ++i) {
-            
-            /* Touch all memory
-             * Doing so seems to remove a weird temporary drop in performance
-             * after processing ~400 million elements in the scalar implementation.
-             */
-            /*
-            for (volatile size_t j = 0; j < input_size;) {
-                input[j] = input[j];
-                j = j + 1;
-            }
-
-            std::memset(output.get(), 0, input_size * sizeof(uint32_t));
-            */
-
             auto begin = steady_clock::now();
 
             f({ input.get(), input_size }, { output.get(), input_size });
 
             times[i] = steady_clock::now() - begin;
-
         }
 
         if (!std::equal(reference.get(), reference.get() + input_size, output.get())) {
@@ -125,16 +125,45 @@ class tester {
                   << times.front() << ", " << times.back()
                   << ", " << times[repeats / 2] << ", " << stdev << '\n';
     }
+
+    /* Test complex algirhtms with additional state */
+    template <typename T>
+    void test_complex(std::string_view name, T& state, complex_test_func<T> auto&& f) const {
+        this->operator()(name, [&](std::span<const uint32_t> input, std::span<uint32_t> output){
+            f(state, input, output);
+        });
+    }
 };
 
-static tester setup(bool plot) {
-    std::cerr << "Elements:      " << input_size << "\n"
-                 "Repeats:       " << repeats << "\n"
-                 "Value ranges:  [0, " << value_limit << "]\n"
-                 "Random seed:   " << seed << "\n"
-                 "Thread count:  " << std::thread::hardware_concurrency()
+static tester setup(int argc, char** argv) {
+    int c;
+    bool plot = false;
+    while ((c = getopt(argc, argv, "pt:")) != -1) {
+        switch(c) {
+            case 'p':
+                plot = true;
+                break;
+
+            case 't': {
+                auto val = std::stol(optarg);
+                if (val > 0) {
+                    thread_count = std::min<size_t>(val, input_size);
+                    partition_size = ((input_size + thread_count) / thread_count);
+                    partition_size_add1 = ((input_size + (thread_count + 1)) / (thread_count + 1));
+                }
+                break;
+            }
+        }
+    }
+
+    std::cerr << "Elements:           " << input_size << "\n"
+                 "Repeats:            " << repeats << "\n"
+                 "Value ranges:       [0, " << value_limit << "]\n"
+                 "Random seed:        " << seed << "\n"
+                 "Thread count:       " << std::thread::hardware_concurrency()
                     << " (" << thread_count << " used by operations)\n"
-                 "Partition size: " << partition_size << '\n';
+                 "Partition size:     " << partition_size << "\n"
+                 "Partition size alt: " << partition_size_add1 << "\n";
 
     std::cerr << "\nGenerating values...    ";
     auto input = make_dataset();
@@ -161,20 +190,17 @@ static tester setup(bool plot) {
     return { plot, std::move(input), std::move(reference) };
 }
 
-int main(int argc, char** argv) {
-    bool plot = (argc > 1 && argv[1] == std::string_view{ "-p" });
-    tester test = setup(plot);
-
-    /* Basic scalar code */
+void scalar(tester& test) {
+     /* Basic scalar code */
     test("Scalar", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         output[0] = input[0];
         for (size_t i = 1; i < input.size(); ++i) {
             output[i] = output[i - 1] + input[i];
         }
     });
+}
 
-    /* SSE 1 and AVX 1 partially from [ADMS20_05] and https://stackoverflow.com/a/19519287/8662472 */
-    
+void basic_sse(tester& test) {
     /* SSE using shuffle to retrieve an offset */
     test("SSE 1", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         __m128i offset = _mm_setzero_si128();
@@ -198,7 +224,9 @@ int main(int argc, char** argv) {
             _mm_store_si128(reinterpret_cast<__m128i*>(output.data() + i), x);
         }
     });
+}
 
+void basic_avx(tester& test) {
     /* AVX using the same principle as SSE 1, but with emulated shift */
     test("AVX 1", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         __m256i offset = _mm256_setzero_si256();
@@ -224,13 +252,13 @@ int main(int argc, char** argv) {
             _mm256_store_si256(reinterpret_cast<__m256i*>(output.data() + i), x);
         }
     });
+}
 
+void basic_multithreaded_no_acc(tester& test) {
     /* Multi-threaded scalar without accumulate */
-    {
+    struct mt_state {
         std::vector<std::thread> threads;
-        threads.reserve(thread_count);
-
-        std::vector<uint32_t> sums(thread_count);
+        std::vector<uint32_t> sums;
 
         /* Used to signal the start of an iteration for testing */
         atomic_barrier wait_start = true;
@@ -251,66 +279,7 @@ int main(int argc, char** argv) {
         std::span<const uint32_t>* input_ptr = nullptr;
         std::span<uint32_t>* output_ptr = nullptr;
 
-        for (size_t i = 0; i < thread_count; ++i) {
-            threads.emplace_back([&, i=i] {
-                size_t start_offset = i * partition_size;
-
-                /* Past-the-end index of the range of elements this thread will process */
-                size_t end_offset = std::min<size_t>(start_offset + partition_size, input_size);
-                
-                for (;;) {
-                    /* Wait for start to be signaled */
-                    wait_start.wait();
-                    
-                    /* Possibly exit */
-                    if (end.load(std::memory_order_relaxed) == true) {
-                        return;
-                    }
-
-                    /* Wait for all threads to have received the startup signal */
-                    start_sync += 1;
-                    start_sync.wait_for(thread_count);
-
-                    /* No thread may be waiting for wait_start anymore since:
-                     *  - All threads must have passed the start_sync barrier
-                     *  - No threads may have passed the sync barrier (since the thread performing
-                     *       this unlock is also one of the thread required to pass it)
-                     */
-                    if (i == 0) {
-                        wait_start.lock();
-                    }
-
-                    auto input = *input_ptr;
-                    auto output = *output_ptr;
-
-                    /* First compute the local prefix sum */
-                    output[start_offset] = input[start_offset];
-                    for (size_t j = start_offset + 1; j < end_offset; ++j) {
-                        output[j] = output[j - 1] + input[j];
-                    }
-
-                    sums[i] = output[end_offset - 1];
-
-                    sync += 1;
-                    sync.wait_for(thread_count);
-
-                    /* Compute local offset based on previous offsets */
-                    uint32_t local_sum = 0;
-                    for (size_t j = 0; j < i; ++j) {
-                        local_sum += sums[j];
-                    }
-
-                    /* Apply local offset */
-                    for (size_t j = start_offset; j < end_offset; ++j) {
-                        output[j] += local_sum;
-                    }
-
-                    done += 1;
-                }
-            });
-        }
-
-        test("Multi Scalar 1 (prefix + offset)", [&](std::span<const uint32_t> input, std::span<uint32_t> output) {
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
             input_ptr = &input;
             output_ptr = &output;
 
@@ -328,23 +297,92 @@ int main(int argc, char** argv) {
             start_sync = 0;
             sync = 0;
             done = 0;
-        });
-
-        /* Signal end for all threads */
-        end.store(true, std::memory_order_relaxed);
-        wait_start.unlock();
-
-        for (auto& th : threads) {
-            th.join();
         }
-    }
 
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
+
+            for (auto& th : threads) {
+                th.join();
+            }
+        }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size;
+
+                    /* Past-the-end index of the range of elements this thread will process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size, input_size);
+                    
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+                        
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        /* First compute the local prefix sum */
+                        output[start_offset] = input[start_offset];
+                        for (size_t j = start_offset + 1; j < end_offset; ++j) {
+                            output[j] = output[j - 1] + input[j];
+                        }
+
+                        sums[i] = output[end_offset - 1];
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        /* Compute local offset based on previous offsets */
+                        uint32_t local_sum = 0;
+                        for (size_t j = 0; j < i; ++j) {
+                            local_sum += sums[j];
+                        }
+
+                        /* Apply local offset */
+                        for (size_t j = start_offset; j < end_offset; ++j) {
+                            output[j] += local_sum;
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi Scalar 1 (prefix + offset)", state);
+}
+
+void basic_multithreaded_acc(tester& test) {
     /* Multi-threaded scalar accumulate  */
-    {
+    struct mt_state {
         std::vector<std::thread> threads;
-        threads.reserve(thread_count);
+        
 
-        std::vector<uint32_t> sums(thread_count);
+        std::vector<uint32_t> sums;
 
         /* Used to signal the start of an iteration for testing */
         atomic_barrier wait_start = true;
@@ -365,67 +403,7 @@ int main(int argc, char** argv) {
         std::span<const uint32_t>* input_ptr = nullptr;
         std::span<uint32_t>* output_ptr = nullptr;
 
-        for (size_t i = 0; i < thread_count; ++i) {
-            threads.emplace_back([&, i=i] {
-                size_t start_offset = i * partition_size;
-
-                /* Past-the-end index of the range of elements this thread will process */
-                size_t end_offset = std::min<size_t>(start_offset + partition_size, input_size);
-                
-                for (;;) {
-                    /* Wait for start to be signaled */
-                    wait_start.wait();
-                    
-                    /* Possibly exit */
-                    if (end.load(std::memory_order_relaxed) == true) {
-                        return;
-                    }
-
-                    /* Wait for all threads to have received the startup signal */
-                    start_sync += 1;
-                    start_sync.wait_for(thread_count);
-
-                    /* No thread may be waiting for wait_start anymore since:
-                     *  - All threads must have passed the start_sync barrier
-                     *  - No threads may have passed the sync barrier (since the thread performing
-                     *       this unlock is also one of the thread required to pass it)
-                     */
-                    if (i == 0) {
-                        wait_start.lock();
-                    }
-
-                    auto input = *input_ptr;
-                    auto output = *output_ptr;
-
-                    /* First compute the local accumulated value */
-                    uint32_t sum = 0;
-                    for (size_t j = start_offset; j < end_offset; ++j) {
-                        sum += input[j];
-                    }
-
-                    sums[i] = sum;
-
-                    sync += 1;
-                    sync.wait_for(thread_count);
-
-                    /* Compute local offset based on previous offsets */
-                    uint32_t local_sum = 0;
-                    for (size_t j = 0; j < i; ++j) {
-                        local_sum += sums[j];
-                    }
-
-                    /* Calculate prefix sum with offset */
-                    output[start_offset] = input[start_offset] + local_sum;
-                    for (size_t j = start_offset + 1; j < end_offset; ++j) {
-                        output[j] = output[j - 1] + input[j];
-                    }
-
-                    done += 1;
-                }
-            });
-        }
-
-        test("Multi Scalar 2 (acc + prefix)", [&](std::span<const uint32_t> input, std::span<uint32_t> output) {
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
             input_ptr = &input;
             output_ptr = &output;
 
@@ -443,15 +421,441 @@ int main(int argc, char** argv) {
             start_sync = 0;
             sync = 0;
             done = 0;
-        });
+        };
 
-        /* Signal end for all threads */
-        end.store(true, std::memory_order_relaxed);
-        wait_start.unlock();
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
 
-        for (auto& th : threads) {
-            th.join();
+            for (auto& th : threads) {
+                th.join();
+            }
         }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size;
+
+                    /* Past-the-end index of the range of elements this thread will process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size, input_size);
+                    
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+                        
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        /* First compute the local accumulated value */
+                        uint32_t sum = 0;
+                        for (size_t j = start_offset; j < end_offset; ++j) {
+                            sum += input[j];
+                        }
+
+                        sums[i] = sum;
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        /* Compute local offset based on previous offsets */
+                        uint32_t local_sum = 0;
+                        for (size_t j = 0; j < i; ++j) {
+                            local_sum += sums[j];
+                        }
+
+                        /* Calculate prefix sum with offset */
+                        output[start_offset] = input[start_offset] + local_sum;
+                        for (size_t j = start_offset + 1; j < end_offset; ++j) {
+                            output[j] = output[j - 1] + input[j];
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi Scalar 2 (acc + prefix)", state);
+}
+
+void optimized_multithreaded_no_acc(tester& test) {
+    /* More efficient multithreaded scalar without accumulate */
+    struct mt_state {
+        std::vector<std::thread> threads;
+        std::vector<uint32_t> sums;
+
+        /* Used to signal the start of an iteration for testing */
+        atomic_barrier wait_start { true };
+
+        /* Used to synchronize startup of all threads */
+        counting_barrier start_sync { 0 };
+
+        /* Tells all threads to stop */
+        std::atomic_bool end = false;
+
+        /* Synchronizes all threads between the 2 passes */
+        counting_barrier sync = 0;
+
+        /* Used to wait for all threads to finish 1 iteration */
+        counting_barrier done = 0;
+
+        /* Pointers for communicating in- and output */
+        std::span<const uint32_t>* input_ptr = nullptr;
+        std::span<uint32_t>* output_ptr = nullptr;
+
+        std::mutex io_mutex;
+
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
+            input_ptr = &input;
+            output_ptr = &output;
+
+            /* Start processing */
+            wait_start.unlock();
+
+            /* Wait for all threads to finish */
+            done.wait_for(thread_count);
+
+            /* Reset state */
+            input_ptr = nullptr;
+            output_ptr = nullptr;
+            
+            /* wait_start was already reset by thread 0 */
+            start_sync = 0;
+            sync = 0;
+            done = 0;
+        }
+
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
+
+            for (auto& th : threads) {
+                th.join();
+            }
+        }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size_add1;
+
+                    /* Past-the-end index of the range of elements this thread will0 process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size_add1, input_size);
+                    
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        /* First compute the local prefix sum */
+                        output[start_offset] = input[start_offset];
+                        for (size_t j = start_offset + 1; j < end_offset; ++j) {
+                            output[j] = output[j - 1] + input[j];
+                        }
+
+                        sums[i] = output[end_offset - 1];
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        if (i == 0) {
+                            start_offset = thread_count * partition_size_add1;
+                            /* First thread computes prefix sum with offset, all others just add offset */
+                            uint32_t local_sum = 0;
+                            for (size_t j = 0; j < thread_count; ++j) {
+                                local_sum += sums[j];
+                            }
+
+                            output[start_offset] = input[start_offset] + local_sum;
+                            for (size_t j = start_offset + 1; j < input_size; ++j) {
+                                output[j] = output[j - 1] + input[j];
+                            }
+
+
+                        } else {
+                            /* Compute local offset based on previous offsets */
+                            uint32_t local_sum = 0;
+                            for (size_t j = 0; j < i; ++j) {
+                                local_sum += sums[j];
+                            }
+
+                            /* Apply local offset */
+                            for (size_t j = start_offset; j < end_offset; ++j) {
+                                output[j] += local_sum;
+                            }
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi Scalar 3 (shift; p+o)", state);
+}
+
+void optimized_multithreaded_acc(tester& test) {
+    /* Multi-threaded scalar accumulate  */
+    struct mt_state {
+        std::vector<std::thread> threads;
+        
+
+        std::vector<uint32_t> sums;
+
+        /* Used to signal the start of an iteration for testing */
+        atomic_barrier wait_start = true;
+
+        /* Used to synchronize startup of all threads */
+        counting_barrier start_sync = 0;
+
+        /* Tells all threads to stop */
+        std::atomic_bool end = false;
+
+        /* Synchronizes all threads between the 2 passes */
+        counting_barrier sync = 0;
+
+        /* Used to wait for all threads to finish 1 iteration */
+        counting_barrier done = 0;
+
+        /* Pointers for communicating in- and output */
+        std::span<const uint32_t>* input_ptr = nullptr;
+        std::span<uint32_t>* output_ptr = nullptr;
+
+        void operator()(std::span<const uint32_t> input, std::span<uint32_t> output) {
+            input_ptr = &input;
+            output_ptr = &output;
+
+            /* Start processing */
+            wait_start.unlock();
+
+            /* Wait for all threads to finish */
+            done.wait_for(thread_count);
+
+            /* Reset state */
+            input_ptr = nullptr;
+            output_ptr = nullptr;
+            
+            /* wait_start was already reset by thread 0 */
+            start_sync = 0;
+            sync = 0;
+            done = 0;
+        };
+
+        ~mt_state() {
+            /* Signal end for all threads */
+            end.store(true, std::memory_order_relaxed);
+            wait_start.unlock();
+
+            for (auto& th : threads) {
+                th.join();
+            }
+        }
+
+        mt_state() {
+            threads.reserve(thread_count);
+            sums.resize(thread_count);
+
+            for (size_t i = 0; i < thread_count; ++i) {
+                threads.emplace_back([&, i=i] {
+                    size_t start_offset = i * partition_size_add1;
+
+                    /* Past-the-end index of the range of elements this thread will process */
+                    size_t end_offset = std::min<size_t>(start_offset + partition_size_add1, input_size);
+                    
+                    for (;;) {
+                        /* Wait for start to be signaled */
+                        wait_start.wait();
+                        
+                        /* Possibly exit */
+                        if (end.load(std::memory_order_relaxed) == true) {
+                            return;
+                        }
+
+                        /* Wait for all threads to have received the startup signal */
+                        start_sync += 1;
+                        start_sync.wait_for(thread_count);
+
+                        /* No thread may be waiting for wait_start anymore since:
+                        *  - All threads must have passed the start_sync barrier
+                        *  - No threads may have passed the sync barrier (since the thread performing
+                        *       this unlock is also one of the thread required to pass it)
+                        */
+                        if (i == 0) {
+                            wait_start.lock();
+                        }
+
+                        auto input = *input_ptr;
+                        auto output = *output_ptr;
+
+                        /* Thread 0 only calculates a prefix sum, the rest a total sum */
+                        if (i == 0) {
+                            output[0] = input[0];
+                            for (size_t j = 1; j < partition_size_add1; ++j) {
+                                output[j] = output[j - 1] + input[j];
+                            }
+
+                            sums[0] = output[end_offset - 1];
+                        } else {
+                            /* Compute the local accumulated value */
+                            uint32_t sum = 0;
+                            for (size_t j = start_offset; j < end_offset; ++j) {
+                                sum += input[j];
+                            }
+
+                            sums[i] = sum;
+                        }
+
+                        sync += 1;
+                        sync.wait_for(thread_count);
+
+                        
+                        if (i == 0) {
+                            /* Turn this into the last thread */
+                            size_t new_start = thread_count * partition_size_add1;
+
+                            uint32_t local_sum = 0;
+                            for (size_t j = 0; j < thread_count; ++j) {
+                                local_sum += sums[j];
+                            }
+
+                            /* Calculate prefix sum with offset */
+                            output[new_start] = input[new_start] + local_sum;
+                            for (size_t j = new_start + 1; j < input_size; ++j) {
+                                output[j] = output[j - 1] + input[j];
+                            }
+                        } else {
+                            /* Compute local offset based on previous offsets */
+                            uint32_t local_sum = 0;
+                            for (size_t j = 0; j < i; ++j) {
+                                local_sum += sums[j];
+                            }
+
+                            /* Calculate prefix sum with offset */
+                            output[start_offset] = input[start_offset] + local_sum;
+                            for (size_t j = start_offset + 1; j < end_offset; ++j) {
+                                output[j] = output[j - 1] + input[j];
+                            }
+                        }
+
+                        done += 1;
+                    }
+                });
+            }
+        }
+    } state;
+
+    test("Multi Scalar 4 (shift; a+p)", state);
+}
+
+
+static void(*tests[])(tester&) {
+    scalar,
+    basic_sse,
+    basic_avx,
+    basic_multithreaded_no_acc,
+    basic_multithreaded_acc,
+    optimized_multithreaded_no_acc,
+    optimized_multithreaded_acc,
+};
+
+void cpuid_dump() {
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    int valid = __get_cpuid(1, &eax, &ebx, &ecx, &edx);
+    if (valid == 1) {
+        std::cerr << "eax: " << std::bitset<32>(eax) << "\n"
+                     "ebx: " << std::bitset<32>(ebx) << "\n"
+                     "ecx: " << std::bitset<32>(ecx) << "\n"
+                     "edx: " << std::bitset<32>(edx) << "\n";
+
+        std::vector<std::pair<std::string_view, bool>> vals {
+            { "fpu:   ", edx & (1 <<  0) },
+            { "cx8:   ", edx & (1 <<  8) },
+            { "mmx:   ", edx & (1 << 23) },
+            { "sse:   ", edx & (1 << 25) },
+            { "sse2:  ", edx & (1 << 26) },
+            { "htt:   ", edx & (1 << 28) },
+            { "tm:    ", edx & (1 << 29) },
+            { "ia64:  ", edx & (1 << 30) },
+            { "sse3:  ", ecx & (1 <<  0) },
+            { "tm2:   ", ecx & (1 <<  8) },
+            { "ssse3: ", ecx & (1 <<  9) },
+            { "fma:   ", ecx & (1 << 12) },
+            { "cx16:  ", ecx & (1 << 13) },
+            { "sse4.1:", ecx & (1 << 19) },
+            { "sse4.2:", ecx & (1 << 20) },
+            { "movbe: ", ecx & (1 << 22) },
+            { "popcnt:", ecx & (1 << 23) },
+            { "aes:   ", ecx & (1 << 25) },
+            { "avx:   ", ecx & (1 << 28) },
+            { "f16c:  ", ecx & (1 << 29) },
+            { "rdrnd: ", ecx & (1 << 30) },
+            { "hyperv:", ecx & (1 << 31) },
+        };
+
+        for (auto& [k, v] : vals) {
+            std::cerr << "  " << k << ' ' << v << '\n';
+        }
+    } else {
+        std::cerr << "invalid cpuid\n";
+    }
+}
+
+int main(int argc, char** argv) {
+    tester test = setup(argc, argv);
+
+    /* SSE 1 and AVX 1 partially from [ADMS20_05] and https://stackoverflow.com/a/19519287/8662472 */
+
+    for (auto func : tests) {
+        func(test);
     }
 
     return 1;
