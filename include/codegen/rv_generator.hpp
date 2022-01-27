@@ -8,6 +8,8 @@
 
 #include <cstdint>
 
+#include "simd.hpp"
+
 /* Utility vector to automatically swap 2 buffers */
 template <typename T>
 class swap_buffer {
@@ -16,13 +18,19 @@ class swap_buffer {
     std::unique_ptr<T[]> vec2;
     bool active = false;
 
+    struct buffer_deleter {
+        void operator()(T* ptr) const {
+            operator delete(ptr, std::align_val_t{ AVX_ALIGNMENT });
+        }
+    };
+
     public:
     swap_buffer() = delete;
     swap_buffer(size_t size)
         : _size{ size }
         /* Align to 64 bytes, for theoretical AVX-512 support */
-        , vec1{ new (std::align_val_t{64}) T[_size] }
-        , vec2{ new (std::align_val_t{64}) T[_size] } { }
+        , vec1{ static_cast<T*>(operator new[](sizeof(T) * _size, std::align_val_t{ AVX_ALIGNMENT })), {} }
+        , vec2{ static_cast<T*>(operator new[](sizeof(T) * _size, std::align_val_t{ AVX_ALIGNMENT })), {} } { }
 
     size_t size() const {
         return _size;

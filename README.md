@@ -18,3 +18,6 @@ meson setup debug --buildtype debug
 cd debug
 ninja
 ```
+
+### XGetopt
+XGetopt is a public domain `getopt` implementation written by Hans Dietrich <[hdietrich2@hotmail.com](mailto:hdietrich2@hotmail.com)>. It is used on the Win32 platform in a slightly modified form.

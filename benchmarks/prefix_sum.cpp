@@ -1,33 +1,39 @@
-#include <iostream>
-#include <random>
-#include <chrono>
-#include <numeric>
+#include <algorithm>
 #include <array>
-#include <iomanip>
-#include <span>
+#include <atomic>
+#include <bitset>
+#include <chrono>
 #include <concepts>
+#include <cstring>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <iterator>
+#include <mutex>
+#include <numeric>
+#include <random>
+#include <ranges>
+#include <span>
 #include <thread>
 #include <vector>
-#include <atomic>
-#include <algorithm>
-#include <ranges>
-#include <iterator>
-#include <cstring>
-#include <bitset>
-#include <functional>
-#include <mutex>
 
-#include <cpuid.h>
+#ifdef _MSC_VER
+#   include <intrin.h>
+#   include "XGetopt.h"
+#else
+/* CPUID is an intrinsic on MSVC */
+#   include <cpuid.h>
+#endif
 
 #include "simd.hpp"
 #include "threading.hpp"
 #include "utils.hpp"
 
-constexpr size_t cache_line_size = 64;
+[[maybe_unused]] constexpr size_t cache_line_size = 64;
 
 constexpr uint64_t seed = 0xC0FFEEA4DBEEF;
-constexpr size_t input_size = 1024*1024;
-constexpr size_t repeats = 1e4;
+constexpr size_t input_size = 1024ull * 1024ull;
+constexpr size_t repeats = 10'000;
 
 /* Maximum value so that we don't overflow after all our additions */
 constexpr size_t value_limit = std::numeric_limits<uint32_t>::max() / input_size;
@@ -53,11 +59,17 @@ static size_t partition_size_align8 = round_up_to_multiple(partition_size, 8);
 
 static_assert((input_size & 0xF) == 0, "input size must be a multiple of 16 (AVX-512-support)");
 
-using dataset = std::unique_ptr<uint32_t[]>;
+struct dataset_deleter {
+    void operator()(uint32_t* ptr) const {
+        operator delete(ptr, std::align_val_t{ AVX_ALIGNMENT });
+    }
+};
+
+using dataset = std::unique_ptr<uint32_t[], dataset_deleter>;
 using std::chrono::steady_clock;
 
 template <size_t Count>
-inline std::ostream& operator<<(std::ostream& os, const std::array<uint32_t, Count>& vec) {
+std::ostream& operator<<(std::ostream& os, const std::array<uint32_t, Count>& vec) {
     for (const auto& v : vec) {
         os << std::setw(3) << v << ' ';
     }
@@ -65,8 +77,12 @@ inline std::ostream& operator<<(std::ostream& os, const std::array<uint32_t, Cou
     return os;
 }
 
-std::unique_ptr<uint32_t[]> make_dataset() {
-    return std::unique_ptr<uint32_t[]>{ new (std::align_val_t{AVX_ALIGNMENT}) uint32_t[input_size] };
+dataset make_dataset() {
+    /* Require manual aligned allocation on MSVC:
+     * https://developercommunity.visualstudio.com/t/using-c17-new-stdalign-val-tn-syntax-results-in-er/528320
+     */
+    void* ptr = operator new[](sizeof(uint32_t) * input_size, std::align_val_t{ AVX_ALIGNMENT });
+    return dataset{ static_cast<uint32_t*>(ptr), {}};
 }
 
 template <typename T>
@@ -77,12 +93,12 @@ concept complex_test_func = std::invocable<T, U&, std::span<const uint32_t>, std
 
 class tester {
     bool plot;
-    std::unique_ptr<uint32_t[]> input;
-    std::unique_ptr<uint32_t[]> reference;
+    dataset input;
+    dataset reference;
 
     public:
     tester() = delete;
-    tester(bool plot, std::unique_ptr<uint32_t[]> input, std::unique_ptr<uint32_t[]>reference)
+    tester(bool plot, dataset input, dataset reference)
         : plot{ plot }, input{ std::move(input) }, reference{ std::move(reference) } { }
 
     /* Test simple algorithms */
@@ -125,7 +141,7 @@ class tester {
 
         long double temp_sum = 0.L;
         for (size_t i = 0; i < repeats; ++i) {
-            long double distance = std::abs(times[i].count() - mean);
+            long double distance = std::abs(static_cast<long double>(times[i].count()) - mean);
             temp_sum += distance * distance;
         }
 
@@ -165,6 +181,9 @@ static tester setup(int argc, char** argv) {
                 }
                 break;
             }
+
+            default:
+                break;
         }
     }
 
@@ -204,7 +223,7 @@ static tester setup(int argc, char** argv) {
     return { plot, std::move(input), std::move(reference) };
 }
 
-void scalar(tester& test) {
+void scalar(const tester& test) {
      /* Basic scalar code */
     test("Scalar", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         output[0] = input[0];
@@ -214,7 +233,7 @@ void scalar(tester& test) {
     });
 }
 
-void basic_sse(tester& test) {
+void basic_sse(const tester& test) {
     /* SSE using shuffle to retrieve an offset */
     test("SSE 1", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         __m128i offset = _mm_setzero_si128();
@@ -240,7 +259,7 @@ void basic_sse(tester& test) {
     });
 }
 
-void basic_avx(tester& test) {
+void basic_avx(const tester& test) {
     /* AVX using the same principle as SSE 1, but with emulated shift */
     test("AVX 1", [](std::span<const uint32_t> input, std::span<uint32_t> output) {
         __m256i offset = _mm256_setzero_si256();
@@ -268,9 +287,14 @@ void basic_avx(tester& test) {
     });
 }
 
-void basic_multithreaded_no_acc(tester& test) {
+void basic_multithreaded_no_acc(const tester& test) {
     /* Multi-threaded scalar without accumulate */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
         std::vector<uint32_t> sums;
 
@@ -390,11 +414,15 @@ void basic_multithreaded_no_acc(tester& test) {
     test("Multi Scalar 1 (prefix + offset)", state);
 }
 
-void basic_multithreaded_acc(tester& test) {
+void basic_multithreaded_acc(const tester& test) {
     /* Multi-threaded scalar accumulate  */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
-        
 
         std::vector<uint32_t> sums;
 
@@ -435,7 +463,7 @@ void basic_multithreaded_acc(tester& test) {
             start_sync = 0;
             sync = 0;
             done = 0;
-        };
+        }
 
         ~mt_state() {
             /* Signal end for all threads */
@@ -516,9 +544,14 @@ void basic_multithreaded_acc(tester& test) {
     test("Multi Scalar 2 (acc + prefix)", state);
 }
 
-void optimized_multithreaded_no_acc(tester& test) {
+void optimized_multithreaded_no_acc(const tester& test) {
     /* More efficient multithreaded scalar without accumulate */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
         std::vector<uint32_t> sums;
 
@@ -657,11 +690,15 @@ void optimized_multithreaded_no_acc(tester& test) {
     test("Multi Scalar 3 (shift; p+o)", state);
 }
 
-void optimized_multithreaded_acc(tester& test) {
+void optimized_multithreaded_acc(const tester& test) {
     /* Multi-threaded scalar accumulate  */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
-        
 
         std::vector<uint32_t> sums;
 
@@ -702,7 +739,7 @@ void optimized_multithreaded_acc(tester& test) {
             start_sync = 0;
             sync = 0;
             done = 0;
-        };
+        }
 
         ~mt_state() {
             /* Signal end for all threads */
@@ -810,9 +847,14 @@ void optimized_multithreaded_acc(tester& test) {
     test("Multi Scalar 4 (shift; a+p)", state);
 }
 
-void optimized_multithreaded_sse(tester& test) {
+void optimized_multithreaded_sse(const tester& test) {
     /* Multithreaded SSE prefix+offset */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
         std::vector<uint32_t> sums;
 
@@ -950,9 +992,14 @@ void optimized_multithreaded_sse(tester& test) {
     test("Multi SSE 1", state);
 }
 
-void optimized_multithreaded_avx(tester& test) {
+void optimized_multithreaded_avx(const tester& test) {
     /* Multithreaded AVX prefix+offset */
     struct mt_state {
+        mt_state(const mt_state&) = delete;
+        mt_state& operator=(const mt_state&) = delete;
+        mt_state(mt_state&&) noexcept = delete;
+        mt_state& operator=(mt_state&&) noexcept = delete;
+
         std::vector<std::thread> threads;
         std::vector<uint32_t> sums;
 
@@ -1094,7 +1141,7 @@ void optimized_multithreaded_avx(tester& test) {
     test("Multi AVX 1", state);
 }
 
-static void(*tests[])(tester&) {
+static void(*tests[])(const tester&) {
     scalar,
     basic_sse,
     basic_avx,
@@ -1107,8 +1154,17 @@ static void(*tests[])(tester&) {
 };
 
 void cpuid_dump() {
+    
+#ifdef _MSC_VER
+    int res[4];
+    int valid = 1;
+    __cpuid(res, 1);
+    auto [eax, ebx, ecx, edx] = res;
+#else
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
     int valid = __get_cpuid(1, &eax, &ebx, &ecx, &edx);
+#endif
+
     if (valid == 1) {
         std::cerr << "eax: " << std::bitset<32>(eax) << "\n"
                      "ebx: " << std::bitset<32>(ebx) << "\n"
@@ -1116,28 +1172,28 @@ void cpuid_dump() {
                      "edx: " << std::bitset<32>(edx) << "\n";
 
         std::vector<std::pair<std::string_view, bool>> vals {
-            { "fpu:   ", edx & (1 <<  0) },
-            { "cx8:   ", edx & (1 <<  8) },
-            { "mmx:   ", edx & (1 << 23) },
-            { "sse:   ", edx & (1 << 25) },
-            { "sse2:  ", edx & (1 << 26) },
-            { "htt:   ", edx & (1 << 28) },
-            { "tm:    ", edx & (1 << 29) },
-            { "ia64:  ", edx & (1 << 30) },
-            { "sse3:  ", ecx & (1 <<  0) },
-            { "tm2:   ", ecx & (1 <<  8) },
-            { "ssse3: ", ecx & (1 <<  9) },
-            { "fma:   ", ecx & (1 << 12) },
-            { "cx16:  ", ecx & (1 << 13) },
-            { "sse4.1:", ecx & (1 << 19) },
-            { "sse4.2:", ecx & (1 << 20) },
-            { "movbe: ", ecx & (1 << 22) },
-            { "popcnt:", ecx & (1 << 23) },
-            { "aes:   ", ecx & (1 << 25) },
-            { "avx:   ", ecx & (1 << 28) },
-            { "f16c:  ", ecx & (1 << 29) },
-            { "rdrnd: ", ecx & (1 << 30) },
-            { "hyperv:", ecx & (1 << 31) },
+            { "fpu:   ", edx & (1u <<  0) },
+            { "cx8:   ", edx & (1u <<  8) },
+            { "mmx:   ", edx & (1u << 23) },
+            { "sse:   ", edx & (1u << 25) },
+            { "sse2:  ", edx & (1u << 26) },
+            { "htt:   ", edx & (1u << 28) },
+            { "tm:    ", edx & (1u << 29) },
+            { "ia64:  ", edx & (1u << 30) },
+            { "sse3:  ", ecx & (1u <<  0) },
+            { "tm2:   ", ecx & (1u <<  8) },
+            { "ssse3: ", ecx & (1u <<  9) },
+            { "fma:   ", ecx & (1u << 12) },
+            { "cx16:  ", ecx & (1u << 13) },
+            { "sse4.1:", ecx & (1u << 19) },
+            { "sse4.2:", ecx & (1u << 20) },
+            { "movbe: ", ecx & (1u << 22) },
+            { "popcnt:", ecx & (1u << 23) },
+            { "aes:   ", ecx & (1u << 25) },
+            { "avx:   ", ecx & (1u << 28) },
+            { "f16c:  ", ecx & (1u << 29) },
+            { "rdrnd: ", ecx & (1u << 30) },
+            { "hyperv:", ecx & (1u << 31) },
         };
 
         for (auto& [k, v] : vals) {

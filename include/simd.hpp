@@ -3,7 +3,11 @@
 
 #include <immintrin.h>
 
-#define FORCE_INLINE inline __attribute__((__always_inline__))
+#ifdef _MSC_VER
+#   define FORCE_INLINE __forceinline
+#else
+#   define FORCE_INLINE inline __attribute__((__always_inline__))
+#endif
 
 /* Align for potential AVX-512 usage */
 #define AVX_ALIGNMENT 64
@@ -85,7 +89,6 @@ FORCE_INLINE __m256i _mm256_srli_si256_dual(__m256i x) {
         /* We already right shifted by 128 bits, so shift the lower lane the remaining number of bytes */
         return _mm256_srli_si256(shuffled, bytes - 16);
     }
-    return shuffled;
 }
 
 #endif /* PTILOPSIS_SIMD_HPP */

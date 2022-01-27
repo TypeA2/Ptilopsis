@@ -3,32 +3,48 @@ project(
     ['c', 'cpp'],
     version: '1.0.0',
     default_options: [
-        'cpp_std=c++20',
         'warning_level=3',
-        'buildtype=release',
+        'buildtype=release'
     ]
 )
 
-add_project_arguments(
-    ['-mavx2'],
-    language: ['c', 'cpp'],
-)
+is_msvc = meson.get_compiler('cpp').get_id() == 'msvc'
+
+if is_msvc
+    add_project_arguments(
+        [ '/arch:AVX2', '/std:c++latest', '/DVC_EXTRALEAN', '/DNOMINMAX', ],
+        language: ['c', 'cpp']
+    )
+else
+    add_project_arguments(
+        [ '-mavx2', '-std=c++20' ],
+        language: ['c', 'cpp']
+    )
+endif
 
 # Use static lib version of pareas-ast as dependency
 pareast_proj = subproject('pareas-ast', default_options: ['warning_level=0'])
 libpareas_ast_dep = pareast_proj.get_variable('libpareas_ast_dep')
 threads_dep = dependency('threads')
 
-sources = [
+ptilopsis_sources = [
     'src/codegen/rv_generator.cpp',
-    'src/main.cpp'
+    'src/main.cpp',
 ]
+
+prefix_sum_sources = [
+    'benchmarks/prefix_sum.cpp',
+]
+
+if is_msvc
+    prefix_sum_sources += 'src/XGetopt.cpp'
+endif
 
 includes = [ include_directories('include') ]
 
 executable(
     'ptilopsis',
-    sources,
+    ptilopsis_sources,
     dependencies: libpareas_ast_dep,
     install: true,
     build_by_default: true,
@@ -37,7 +53,7 @@ executable(
 
 executable(
     'prefix_sum',
-    [ 'benchmarks/prefix_sum.cpp' ],
+    prefix_sum_sources,
     dependencies: threads_dep,
     include_directories: includes
 )

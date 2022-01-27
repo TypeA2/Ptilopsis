@@ -21,7 +21,7 @@ rv_generator::rv_generator(const DepthTree& tree)
     , depth      { nodes }, child_idx    { nodes }, node_data { nodes } {
     
     auto types = tree.getNodeTypes();
-    std::transform(types.begin(), types.end(), node_types->get(), [](uint8_t v) {
+    std::ranges::transform(types, node_types->get(), [](uint8_t v) {
         return static_cast<uint8_t>(pareas_to_rv_nodetype[v]);
     });
     std::copy_n(tree.getResultingTypes().begin(), nodes, result_types->get());
@@ -42,11 +42,11 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     os << std::setfill(' ');
 
     /* Defined in datatype.cpp */
+    // ReSharper disable once CppTooWideScope
+    // ReSharper disable once CppInconsistentNaming
     extern const char* TYPE_NAMES[];
 
-    static_assert(std::numeric_limits<long double>::digits >= 64,
-                  "long double requires >=64 bits of precision");
-    size_t digits = log10l(nodes) + 1;
+    auto digits = static_cast<size_t>(log10l(static_cast<long double>(nodes)) + 1);
 
     for (size_t i = 0; i < nodes; ++i) {
         // Why must GCC not have std::format support yet...

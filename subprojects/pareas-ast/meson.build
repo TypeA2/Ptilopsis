@@ -8,10 +8,12 @@ project(
     ]
 )
 
-add_project_arguments(
-    ['-Wno-unused-parameter', '-Wno-ignored-qualifiers'],
-    language: ['c', 'cpp'],
-)
+if meson.get_compiler('cpp').get_id() != 'msvc'
+	add_project_arguments(
+	    ['-Wno-unused-parameter', '-Wno-ignored-qualifiers'],
+	    language: ['c', 'cpp'],
+	)
+endif
 
 # Final executable
 sources = [

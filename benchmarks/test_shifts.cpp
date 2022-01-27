@@ -1,7 +1,7 @@
 #include <array>
-#include <iostream>
-#include <iomanip>
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
 
 #include "simd.hpp"
 
@@ -28,15 +28,15 @@ int main() {
         std::cerr << '\n';
     };
 
-    testleft.template operator()<0>();
-    testleft.template operator()<4>();
-    testleft.template operator()<8>();
-    testleft.template operator()<12>();
-    testleft.template operator()<16>();
-    testleft.template operator()<20>();
-    testleft.template operator()<24>();
-    testleft.template operator()<28>();
-    testleft.template operator()<32>();
+    testleft.operator()<0>();
+    testleft.operator()<4>();
+    testleft.operator()<8>();
+    testleft.operator()<12>();
+    testleft.operator()<16>();
+    testleft.operator()<20>();
+    testleft.operator()<24>();
+    testleft.operator()<28>();
+    testleft.operator()<32>();
 
     std::cerr << "_mm256_srli_si256_dual:\n";;
 
@@ -56,13 +56,13 @@ int main() {
         std::cerr << '\n';
     };
 
-    testright.template operator()<0>();
-    testright.template operator()<4>();
-    testright.template operator()<8>();
-    testright.template operator()<12>();
-    testright.template operator()<16>();
-    testright.template operator()<20>();
-    testright.template operator()<24>();
-    testright.template operator()<28>();
-    testright.template operator()<32>();
+    testright.operator()<0>();
+    testright.operator()<4>();
+    testright.operator()<8>();
+    testright.operator()<12>();
+    testright.operator()<16>();
+    testright.operator()<20>();
+    testright.operator()<24>();
+    testright.operator()<28>();
+    testright.operator()<32>();
 }

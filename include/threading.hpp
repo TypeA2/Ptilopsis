@@ -4,13 +4,21 @@
 #include <atomic>
 #include <functional>
 
+#ifdef _MSC_VER
+#   include <Windows.h>
+#endif
+
 #define USE_PAUSE
 
 #ifdef USE_PAUSE
-# define MAYBE_PAUSE() __builtin_ia32_pause()
+#   ifdef _MSC_VER
+#       define MAYBE_PAUSE() YieldProcessor();
+#   else
+#       define MAYBE_PAUSE() __builtin_ia32_pause()
+#   endif
 #else
-# warning "Not using PAUSE instruction"
-# define MAYBE_PAUSE()
+#   warning "Not using PAUSE instruction"
+#   define MAYBE_PAUSE()
 #endif
 
 /* What should be a more efficient spinlock than a naive implementation
