@@ -1,103 +1,103 @@
 [
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o -c ../subprojects/pareas-ast/src/codegen/astnode.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o -c ../subprojects/pareas-ast/src/codegen/astnode.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/astnode.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_astnode.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o -c ../subprojects/pareas-ast/src/codegen/datatype.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o -c ../subprojects/pareas-ast/src/codegen/datatype.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/datatype.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_datatype.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o -c ../subprojects/pareas-ast/src/codegen/depthtree.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o -c ../subprojects/pareas-ast/src/codegen/depthtree.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/depthtree.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_depthtree.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o -c ../subprojects/pareas-ast/src/codegen/lexer.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o -c ../subprojects/pareas-ast/src/codegen/lexer.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/lexer.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_lexer.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o -c ../subprojects/pareas-ast/src/codegen/parser.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o -c ../subprojects/pareas-ast/src/codegen/parser.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/parser.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_parser.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o -c ../subprojects/pareas-ast/src/codegen/symtab.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o -c ../subprojects/pareas-ast/src/codegen/symtab.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/symtab.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_symtab.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o -c ../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o -c ../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_treeproperties.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o -c ../subprojects/pareas-ast/src/codegen/token.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o -c ../subprojects/pareas-ast/src/codegen/token.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/token.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_codegen_token.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o -c ../subprojects/pareas-ast/src/main.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/pareas-ast.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -MD -MQ subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o -MF subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o.d -o subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o -c ../subprojects/pareas-ast/src/main.cpp",
     "file": "../subprojects/pareas-ast/src/main.cpp",
     "output": "subprojects/pareas-ast/pareas-ast.p/src_main.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o -c ../subprojects/pareas-ast/src/codegen/astnode.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o -c ../subprojects/pareas-ast/src/codegen/astnode.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/astnode.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_astnode.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o -c ../subprojects/pareas-ast/src/codegen/datatype.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o -c ../subprojects/pareas-ast/src/codegen/datatype.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/datatype.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_datatype.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o -c ../subprojects/pareas-ast/src/codegen/depthtree.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o -c ../subprojects/pareas-ast/src/codegen/depthtree.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/depthtree.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_depthtree.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o -c ../subprojects/pareas-ast/src/codegen/lexer.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o -c ../subprojects/pareas-ast/src/codegen/lexer.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/lexer.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_lexer.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o -c ../subprojects/pareas-ast/src/codegen/parser.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o -c ../subprojects/pareas-ast/src/codegen/parser.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/parser.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_parser.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o -c ../subprojects/pareas-ast/src/codegen/symtab.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o -c ../subprojects/pareas-ast/src/codegen/symtab.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/symtab.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_symtab.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o -c ../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o -c ../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/treeproperties.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_treeproperties.cpp.o"
   },
   {
     "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
-    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o -c ../subprojects/pareas-ast/src/codegen/token.cpp",
+    "command": "c++ -Isubprojects/pareas-ast/liblibpareas-ast.a.p -Isubprojects/pareas-ast -I../subprojects/pareas-ast -I../subprojects/pareas-ast/src -I../subprojects/pareas-ast/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -O3 -Wno-unused-parameter -Wno-ignored-qualifiers -std=c++20 -fPIC -MD -MQ subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o -MF subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o.d -o subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o -c ../subprojects/pareas-ast/src/codegen/token.cpp",
     "file": "../subprojects/pareas-ast/src/codegen/token.cpp",
     "output": "subprojects/pareas-ast/liblibpareas-ast.a.p/src_codegen_token.cpp.o"
   },
