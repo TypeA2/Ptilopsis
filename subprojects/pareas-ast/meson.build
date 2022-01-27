@@ -3,14 +3,14 @@ project(
     ['c', 'cpp'],
     version: '0.0.0',
     default_options: [
-        'cpp_std=c++2a',
+        'cpp_std=c++20',
         'buildtype=release',
     ]
 )
 
 if meson.get_compiler('cpp').get_id() != 'msvc'
 	add_project_arguments(
-	    ['-Wno-unused-parameter', '-Wno-ignored-qualifiers'],
+	    ['-Wno-unused-parameter', '-Wno-ignored-qualifiers', '-std=c++20'],
 	    language: ['c', 'cpp'],
 	)
 endif
