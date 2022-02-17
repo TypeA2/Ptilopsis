@@ -28,7 +28,7 @@ libpareas_ast_dep = pareast_proj.get_variable('libpareas_ast_dep')
 threads_dep = dependency('threads')
 
 ptilopsis_sources = [
-    'src/codegen/rv_generator.cpp',
+'src/codegen/rv_generator.cpp',
     'src/main.cpp',
 ]
 

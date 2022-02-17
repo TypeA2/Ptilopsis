@@ -8,7 +8,12 @@ project(
     ]
 )
 
-if meson.get_compiler('cpp').get_id() != 'msvc'
+if meson.get_compiler('cpp').get_id() == 'msvc'
+	add_project_arguments(
+		[ '/std:c++latest', '/DVC_EXTRALEAN', '/DNOMINMAX', ],
+		language: ['c', 'cpp'],
+	)
+else
 	add_project_arguments(
 	    ['-Wno-unused-parameter', '-Wno-ignored-qualifiers', '-std=c++20'],
 	    language: ['c', 'cpp'],

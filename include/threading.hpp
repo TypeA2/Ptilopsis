@@ -1,5 +1,4 @@
-#ifndef PTILOPSIS_THREADING_HPP
-#define PTILOPSIS_THREADING_HPP
+#pragma once
 
 #include <atomic>
 #include <functional>
@@ -12,7 +11,7 @@
 
 #ifdef USE_PAUSE
 #   ifdef _MSC_VER
-#       define MAYBE_PAUSE() YieldProcessor();
+#       define MAYBE_PAUSE() YieldProcessor()
 #   else
 #       define MAYBE_PAUSE() __builtin_ia32_pause()
 #   endif
@@ -25,7 +24,7 @@
  * From: https://rigtorp.se/spinlock/
  */
 class spinlock {
-    std::atomic_bool flag = false;
+    std::atomic_bool flag{ false };
 
     public:
     void lock() noexcept {
@@ -54,9 +53,9 @@ class atomic_barrier {
     std::atomic_bool should_wait;
 
     public:
-    atomic_barrier(bool should_wait = false) : should_wait{ should_wait } { }
+    explicit atomic_barrier(bool should_wait = false) : should_wait{ should_wait } { }
     
-    void wait() noexcept {
+    void wait() const noexcept {
         for (;;) {
             if (!should_wait.load(std::memory_order_acquire)) {
                 return;
@@ -84,7 +83,7 @@ class counting_barrier {
 
     public:
     counting_barrier() = delete;
-    counting_barrier(size_t count) : count { count } { }
+    explicit counting_barrier(size_t count) : count { count } { }
 
     template <typename Comp = std::equal_to<>>
     void wait_for(size_t val, Comp comp = {}) const noexcept {
@@ -118,5 +117,3 @@ class counting_barrier {
         return count.load(std::memory_order_relaxed);
     }
 };
-
-#endif /* PTILOPSIS_THREADING_HPP */

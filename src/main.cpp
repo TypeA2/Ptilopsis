@@ -14,8 +14,7 @@
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-      std::cerr << "Please provide a single input file.\n"
-                   "usage: " << argv[0] << " <input-file>\n";
+      std::cerr << "usage: " << argv[0] << " <input>\n";
       return EXIT_FAILURE;
     }
 
@@ -46,9 +45,12 @@ int main(int argc, char** argv) {
         /* Convert to an inverted tree */
         DepthTree depth_tree(node.get());
         
-        rv_generator gen{ depth_tree };
+        rv_generator_st gen{ depth_tree };
 
-        node->print(std::cout);
+        // node->print(std::cout);
+
+        gen.process();
+
         gen.print(std::cout);
     }
     catch(const ParseException& e) {

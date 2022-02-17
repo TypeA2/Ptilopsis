@@ -1,5 +1,4 @@
-#ifndef PTILOPSIS_SIMD_HPP
-#define PTILOPSIS_SIMD_HPP
+#pragma once
 
 #include <immintrin.h>
 
@@ -17,7 +16,7 @@
  * 256-bit left-shift, as per: https://stackoverflow.com/a/25264853/8662472
  */
 template <uint8_t bytes>
-FORCE_INLINE __m256i _mm256_slli_si256_dual(__m256i x) {
+FORCE_INLINE __m256i _mm256_slli_si256_dual(__m256i x) {  // NOLINT(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
     /* Left shift by 128 bits:
      * dest[127:0] := 0
      * dest[255:128] := src1[127:0]
@@ -56,7 +55,7 @@ FORCE_INLINE __m256i _mm256_slli_si256_dual(__m256i x) {
 
 /* Same situation as with _mm256_slli_si256, this emulates a right-shift on 1 256-bit lane. */
 template <uint8_t bytes>
-FORCE_INLINE __m256i _mm256_srli_si256_dual(__m256i x) {
+FORCE_INLINE __m256i _mm256_srli_si256_dual(__m256i x) {  // NOLINT(clang-diagnostic-reserved-identifier, bugprone-reserved-identifier)
     /* Right shift by 128 bits:
      * dest[127:0] := src1[255:128]
      * dest[255:128] := 0
@@ -90,5 +89,3 @@ FORCE_INLINE __m256i _mm256_srli_si256_dual(__m256i x) {
         return _mm256_srli_si256(shuffled, bytes - 16);
     }
 }
-
-#endif /* PTILOPSIS_SIMD_HPP */

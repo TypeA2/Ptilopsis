@@ -1,0 +1,7 @@
+.vs/*
+tex/*
+!tex/*.tex
+!tex/*.pdf
+
+*.exe
+*.bak

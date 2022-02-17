@@ -1,5 +1,4 @@
-#ifndef PTILOPSIS_HELPER_HPP
-#define PTILOPSIS_HELPER_HPP
+#pragma once
 
 #include <type_traits>
 
@@ -12,7 +11,7 @@ namespace ptilopsis {
 }
 
 inline std::ostream& operator<<(std::ostream& os, std::chrono::nanoseconds ns) {
-    auto count = ns.count();
+    auto count = static_cast<long double>(ns.count());
     if (count < 1'000) {
         os << count << " ns";
     } else if (count < 1'000'000) {
@@ -25,5 +24,3 @@ inline std::ostream& operator<<(std::ostream& os, std::chrono::nanoseconds ns) {
 
     return os;
 }
-
-#endif /* PTILOPSIS_HELPER_HPP */

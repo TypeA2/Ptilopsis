@@ -1,5 +1,4 @@
-#ifndef PTILOPSIS_RV_NODETYPE_HPP
-#define PTILOPSIS_RV_NODETYPE_HPP
+#pragma once
 
 #include <codegen/astnode.hpp>
 
@@ -107,5 +106,3 @@ constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::FUNC_DECL_DUMMY]    = */ rv_node_type::func_decl_dummy,
     /* [NodeType::RETURN_STAT]        = */ rv_node_type::return_statement,
 };
-
-#endif /* PTILOPSIS_RV_NODETYPE_HPP */
