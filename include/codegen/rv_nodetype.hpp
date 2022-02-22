@@ -9,23 +9,10 @@ enum class rv_node_type : uint8_t {
     invalid,
     statement_list,
     empty,
-
-    func_decl,
-    func_arg,
-    func_arg_float_as_int,
-    func_arg_on_stack,
-    func_arg_list,
-
     expression,
     if_statement,
     if_else_statement,
     while_statement,
-
-    func_call_expression,
-    func_call_arg,
-    func_call_arg_float_as_int,
-    func_call_arg_on_stack,
-    func_call_arg_list,
 
     add_expr,
     sub_expr,
@@ -58,7 +45,66 @@ enum class rv_node_type : uint8_t {
     while_dummy,
     func_decl_dummy,
     return_statement,
+
+    func_decl,
+    func_arg_list,
+
+    func_call_expression,
+    func_call_arg_list,
+
+    /*
+     * Func args will always have the 8th bit set, and the 7th bit is set if it's a call.
+     * Lower 2 bits determine the type of argument (NOT the type _of_ the argument).
+     *
+     * This way a bitwise AND with func_arg identifies any arguments
+     */
+    func_arg                   = 0b10000000,
+    func_arg_float_as_int      = 0b10000001,
+    func_arg_on_stack          = 0b10000010,
+    func_call_arg              = 0b11000000,
+    func_call_arg_float_as_int = 0b11000001,
+    func_call_arg_on_stack     = 0b11000010,
+    
 };
+
+using rv_node_type_t = std::underlying_type_t<rv_node_type>;
+using data_type_t = std::underlying_type_t<DataType>;
+
+constexpr rv_node_type operator+(rv_node_type lhs, rv_node_type_t rhs) {
+    return static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) + rhs);
+}
+
+constexpr rv_node_type& operator+=(rv_node_type& lhs, rv_node_type_t rhs) {
+    return (lhs = lhs + rhs);
+}
+
+constexpr rv_node_type_t operator&(rv_node_type lhs, rv_node_type rhs) {
+    return static_cast<rv_node_type_t>(lhs) & static_cast<rv_node_type_t>(rhs);
+}
+
+constexpr rv_node_type_t operator&(rv_node_type lhs, rv_node_type_t rhs) {
+    return static_cast<rv_node_type_t>(lhs) & rhs;
+}
+
+constexpr rv_node_type& operator&=(rv_node_type& lhs, rv_node_type_t rhs) {
+    return (lhs = static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) & rhs));
+}
+
+constexpr rv_node_type_t operator|(rv_node_type lhs, rv_node_type rhs) {
+    return static_cast<rv_node_type_t>(lhs) | static_cast<rv_node_type_t>(rhs);
+}
+
+constexpr rv_node_type_t operator|(rv_node_type lhs, rv_node_type_t rhs) {
+    return static_cast<rv_node_type_t>(lhs) | rhs;
+}
+
+constexpr rv_node_type& operator|=(rv_node_type& lhs, rv_node_type_t rhs) {
+    return (lhs = static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) | rhs));
+}
+
+constexpr data_type_t operator&(DataType lhs, data_type_t rhs) {
+    return static_cast<data_type_t>(lhs) & rhs;
+}
 
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,

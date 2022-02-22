@@ -47,7 +47,7 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     for (size_t i = 0; i < nodes; ++i) {
         // Why must GCC not have std::format support yet...
         os << "Node "          << std::setw(digits) << i
-           << ", type = "      << std::setw(2) << static_cast<uint32_t>(node_types[i])
+           << ", type = "      << std::setw(3) << static_cast<uint32_t>(node_types[i])
            << ", result = "    << std::setw(9) << result_types[i]
            << ", parent = "    << std::setw(2) << parents[i]
            << ", depth = "     << std::setw(2) << depth[i]
@@ -70,26 +70,26 @@ void rv_generator_st::process() {
 }
 
 void rv_generator_st::preprocess() {
-    // TODO: Absolute or relative register indices?
     for (size_t i = 0; i < nodes; ++i) {
-        /* transform only func_args */
-        if (node_types[i] == rv_node_type::func_arg) {
+        /* transform only func_args and func_call_args */
+        if (node_types[i] & rv_node_type::func_arg) {
             /* node_data is the argument index, for this specific type,
              * child_idx is the index of the argument overall
              */
-            if (result_types[i] == DataType::FLOAT_REF
-                && node_data[i] < 8) {
+
+            /* Lower bit set and popcnt > 1 means either float_ref or float*/
+            if ((result_types[i] & 0b001) && (result_types[i] & 0b110) && (node_data[i] < 8)) {
                 /* 8 floating point registers are available for arguments,
-                 * meaning the first 8 are always passed in the corresponding registers
+                 * meaning the first 8 are always passed in these
                  */
-                node_types[i] = rv_node_type::func_arg;
+
                 /* Adjust node data to represent actual register index */
                 node_data[i] += 10;
 
             } else {
                 /* Index of the integer register in which to place this argument */
                 int32_t preceding_integers;
-                if (result_types[i] == DataType::FLOAT_REF) {
+                if ((result_types[i] & 0b001) && (result_types[i] & 0b110)) {
                     /* All preceding non-float arguments are integer */
                     preceding_integers = child_idx[i] - node_data[i];
                     
@@ -98,25 +98,25 @@ void rv_generator_st::preprocess() {
                 }
 
                 int32_t preceding_floats = child_idx[i] - preceding_integers;
+
+                /* Integer Register index, logical integer register to place this value in */
                 int32_t ir_idx = preceding_integers + std::max<int32_t>(preceding_floats - 8, 0);
 
                 if (ir_idx < 8) {
-                    /* This argument is placed in an integer register */
-                    if (result_types[i] == DataType::FLOAT_REF) {
-                        /* A float in an integer register */
-                        node_types[i] = rv_node_type::func_arg_float_as_int;
+                    /* Same register is used for integers and float-in-int-register */
+                    node_data[i] = ir_idx + 10;
 
-                        /* Set the node data to the index of the integer register this argument gets placed in */
-                        node_data[i] = ir_idx + 10;
-                    } else {
-                        /* An integer in an integer register */
-                        node_types[i] = rv_node_type::func_arg;
-                        /* Node data is still the register index, so adjust */
-                        node_data[i] = ir_idx + 10;
+                    /* This argument is placed in an integer register */
+                    if ((result_types[i] & 0b001) && (result_types[i] & 0b110)) {
+                        /* A float in an integer register */
+                        node_types[i] |= 0b01;// rv_node_type::func_arg_float_as_int;
                     }
+
+                    /* Integer in integer register is a normal func_arg, so don't touch */
+
                 } else {
                     /* Register overflow, argument is on the stack */
-                    node_types[i] = rv_node_type::func_arg_on_stack;
+                    node_types[i] |= 0b10;// rv_node_type::func_arg_on_stack;
 
                     /* Every argument past the 8th takes 4 bytes */
                     node_data[i] = (ir_idx - 8) * 4;
