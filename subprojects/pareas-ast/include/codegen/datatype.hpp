@@ -5,12 +5,12 @@
 #include <cstdint>
 
 enum class DataType : uint8_t {
-    INVALID,
-    VOID,
-    INT,
-    FLOAT,
-    INT_REF,
-    FLOAT_REF
+    INVALID   /* = 0b000 */,
+    VOID      /* = 0b001 */,
+    INT       /* = 0b010 */,
+    FLOAT     /* = 0b011 */,
+    INT_REF   /* = 0b100 */,
+    FLOAT_REF /* = 0b101 */
 };
 
 DataType reference_of(DataType);

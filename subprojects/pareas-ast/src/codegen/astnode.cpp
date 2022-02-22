@@ -224,7 +224,7 @@ void ASTNode::resolveType() {
             for(size_t i = 0; i < this->children.size(); ++i) {
                 assert_type(i, {DataType::INT, DataType::FLOAT});
                 DataType d_type = this->children[i]->return_type;
-                size_t arg_idx = d_type == DataType::INT_REF ? num_int_args++ : i - num_int_args;
+                size_t arg_idx = d_type == DataType::INT ? num_int_args++ : i - num_int_args;
                 this->children[i]->integer = arg_idx;
             }
         }
