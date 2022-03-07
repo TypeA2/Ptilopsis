@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <chrono>
 
 #include <codegen/lexer.hpp>
 #include <codegen/parser.hpp>
@@ -47,11 +48,15 @@ int main(int argc, char** argv) {
         
         rv_generator_st gen{ depth_tree };
 
-        // node->print(std::cout);
+        node->print(std::cout);
 
+        auto begin = std::chrono::steady_clock::now();
         gen.process();
+        auto end = std::chrono::steady_clock::now();
 
         gen.print(std::cout);
+
+        std::cout << "Processing done in " << (end - begin) << '\n';
     }
     catch(const ParseException& e) {
         std::cerr << "Parse error: " << e.what() << std::endl;

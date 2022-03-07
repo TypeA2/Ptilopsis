@@ -70,9 +70,10 @@ void rv_generator_st::process() {
 }
 
 void rv_generator_st::preprocess() {
+    /* Function argument node preprocessing */
     for (size_t i = 0; i < nodes; ++i) {
         /* transform only func_args and func_call_args */
-        if (node_types[i] & rv_node_type::func_arg) {
+        if ((node_types[i] & rv_node_type::func_arg) == rv_node_type::func_arg) {
             /* node_data is the argument index, for this specific type,
              * child_idx is the index of the argument overall
              */
@@ -122,6 +123,16 @@ void rv_generator_st::preprocess() {
                     node_data[i] = (ir_idx - 8) * 4;
                 }
             }
+        }
+    }
+
+    /* Comparison operator preprocessing */
+    for (size_t i = 0; i < nodes; ++i) {
+        // TODO: convert to a mapping operation (write in a separate memory buffer and then apply)
+        /* If the parent of this node is a comparison operator and this node is a float */
+        if ((node_types[parents[i]] & rv_node_type::eq_expr) == rv_node_type::eq_expr
+            && result_types[i] == DataType::FLOAT) {
+            result_types[parents[i]] = DataType::FLOAT;
         }
     }
 }
