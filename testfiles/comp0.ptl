@@ -1,0 +1,11 @@
+function comp() : int {
+    if (4) {
+        return 42;
+    } else {
+        return -12;
+    }
+}
+
+function main() : int {
+    return comp();
+}

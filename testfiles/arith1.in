@@ -1,0 +1,11 @@
+function print(arg:float) : void {
+    out : int = arg@int;
+}
+
+function main() : int {
+    x : float = 4.2;
+    y : float = 3.1415;
+    print(x + y);
+    print(3.0 * (x + (y / 2.0)));
+    return 0;
+}

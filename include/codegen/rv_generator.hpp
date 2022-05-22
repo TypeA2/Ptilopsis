@@ -11,7 +11,7 @@
 
 #include "rv_nodetype.hpp"
 #include "simd.hpp"
-#include "swap_buffer.hpp"
+#include "avx_buffer.hpp"
 
 class DepthTree;
 
@@ -19,6 +19,7 @@ class DepthTree;
 class rv_generator {
     protected:
     size_t nodes;
+    size_t max_depth;
 
     avx_buffer<rv_node_type> node_types;
     avx_buffer<DataType> result_types;
@@ -27,7 +28,18 @@ class rv_generator {
     avx_buffer<int32_t> child_idx;
     avx_buffer<uint32_t> node_data;
 
+    /* Generated RISC-V instructions, in 32-bit words */
+    avx_buffer<uint32_t> instructions;
+
+    /* Number of instructions for each node */
+    avx_buffer<uint32_t> node_sizes;
+
+    /* Location indices for each node */
+    avx_buffer<uint32_t> node_locations;
+
     public:
+    static constexpr size_t registers_per_node = 3;
+
     explicit rv_generator(const DepthTree& tree);
 
     rv_generator(const rv_generator&) = delete;
@@ -56,5 +68,7 @@ class rv_generator_st : public rv_generator {
 
     private:
     void preprocess();
+    void isn_cnt();
+    void isn_gen();
 };
 

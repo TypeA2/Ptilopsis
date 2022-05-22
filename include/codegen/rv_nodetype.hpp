@@ -1,6 +1,13 @@
 #pragma once
 
+#include <array>
+#include <iostream>
+
+#include <magic_enum.hpp>
+
 #include <codegen/astnode.hpp>
+
+using namespace magic_enum::bitwise_operators;
 
 /* Separate node type definitions because
  * at this point they're not typechecked anymore
@@ -10,9 +17,6 @@ enum class rv_node_type : uint8_t {
     statement_list,
     empty,
     expression,
-    if_statement,
-    if_else_statement,
-    while_statement,
 
     add_expr,
     sub_expr,
@@ -31,6 +35,7 @@ enum class rv_node_type : uint8_t {
     bitnot_expr,
     logic_not_expr,
     neg_expr,
+
     literal_expr,
     cast_expr,
     deref_expr,
@@ -45,6 +50,18 @@ enum class rv_node_type : uint8_t {
     func_arg_list,
 
     func_call_expression,
+    func_call_arg_list,
+
+    /*
+     * Branch operations have their upper 4 bits set to 0b1101
+     * The lowest bit represents the child index of the condition node:
+     *  - if and if_else have their condition as the first node
+     *  - while has it's condition as a second node
+     */
+    if_statement      = 0b11010000,
+    while_statement   = 0b11010001,
+    if_else_statement = 0b11010010,
+    
 
     /*
      * Comparison operators have the upper 4 bits set to 0b1110
@@ -74,6 +91,20 @@ enum class rv_node_type : uint8_t {
 using rv_node_type_t = std::underlying_type_t<rv_node_type>;
 using data_type_t = std::underlying_type_t<DataType>;
 
+constexpr size_t max_node_types = 1 << (sizeof(rv_node_type_t) * std::numeric_limits<rv_node_type_t>::digits);
+
+template <>
+struct magic_enum::customize::enum_range<rv_node_type> {
+    static constexpr int min = 0;
+    static constexpr int max = max_node_types;
+};
+
+template <typename T> requires std::is_enum_v<T>
+constexpr auto as_index(T v) {
+    // return magic_enum::enum_integer<T>
+    return static_cast<uint32_t>(v);
+}
+
 constexpr rv_node_type operator+(rv_node_type lhs, rv_node_type_t rhs) {
     return static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) + rhs);
 }
@@ -82,10 +113,12 @@ constexpr rv_node_type& operator+=(rv_node_type& lhs, rv_node_type_t rhs) {
     return (lhs = lhs + rhs);
 }
 
+/*
 constexpr rv_node_type operator&(rv_node_type lhs, rv_node_type rhs) {
     return static_cast<rv_node_type>(
         static_cast<rv_node_type_t>(lhs) & static_cast<rv_node_type_t>(rhs));
 }
+*/
 
 constexpr rv_node_type operator&(rv_node_type lhs, rv_node_type_t rhs) {
     return static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) & rhs);
@@ -95,10 +128,12 @@ constexpr rv_node_type& operator&=(rv_node_type& lhs, rv_node_type_t rhs) {
     return (lhs = static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) & rhs));
 }
 
+/*
 constexpr rv_node_type operator|(rv_node_type lhs, rv_node_type rhs) {
     return static_cast<rv_node_type>(
         static_cast<rv_node_type_t>(lhs) | static_cast<rv_node_type_t>(rhs));
 }
+*/
 
 constexpr rv_node_type operator|(rv_node_type lhs, rv_node_type_t rhs) {
     return static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) | rhs);
@@ -108,9 +143,83 @@ constexpr rv_node_type& operator|=(rv_node_type& lhs, rv_node_type_t rhs) {
     return (lhs = static_cast<rv_node_type>(static_cast<rv_node_type_t>(lhs) | rhs));
 }
 
+constexpr bool operator==(rv_node_type lhs, rv_node_type_t rhs) {
+    return static_cast<rv_node_type_t>(lhs) == rhs;
+}
+
 constexpr data_type_t operator&(DataType lhs, data_type_t rhs) {
     return static_cast<data_type_t>(lhs) & rhs;
 }
+
+/* Similar to NODE_COUNT_TABLE in Pareas */
+constexpr auto generate_size_mapping() {
+    using enum rv_node_type;
+
+    /* res[x][y] = node size for node type x with return type y*/
+    std::array<std::array<uint32_t, magic_enum::enum_count<DataType>()>, max_node_types> res{};
+
+    /* Hardcode all values like this because we dont have designated array initializers */
+    res[as_index(invalid)]        = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(statement_list)] = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(empty)]          = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(expression)]     = { 0, 0, 0, 0, 0, 0 };
+
+    res[as_index(add_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(sub_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(mul_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(div_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(mod_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(bitand_expr)]    = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(bitor_expr)]     = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(bitxor_expr)]    = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(lshift_expr)]    = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(rshift_expr)]    = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(urshift_expr)]   = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(logic_and_expr)] = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(logic_or_expr)]  = { 0, 0, 0, 0, 0, 0 };
+
+    res[as_index(bitnot_expr)]    = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(logic_not_expr)] = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(neg_expr)]       = { 1, 1, 1, 1, 1, 1 };
+
+    res[as_index(literal_expr)]         = { 0, 0, 2, 3, 0, 0 };
+    res[as_index(cast_expr)]        = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(deref_expr)]       = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(assign_expr)]      = { 2, 2, 2, 2, 2, 2 };
+    res[as_index(decl_expr)]        = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(id_expr)]          = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(while_dummy)]      = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(func_decl_dummy)]  = { 6, 6, 6, 6, 6, 6 };
+    res[as_index(return_statement)] = { 2, 2, 2, 2, 2, 2 };
+
+    res[as_index(func_decl)]     = { 6, 6, 6, 6, 6, 6 };
+    res[as_index(func_arg_list)] = { 0, 0, 0, 0, 0, 0 };
+
+    res[as_index(func_call_expression)] = { 3, 3, 3, 3, 3, 3 };
+    res[as_index(func_call_arg_list)]   = { 0, 0, 0, 0, 0, 0 };
+
+    res[as_index(if_statement)]      = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(while_statement)]   = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(if_else_statement)] = { 0, 0, 0, 0, 0, 0 };
+
+    res[as_index(eq_expr)]  = { 0, 0, 2, 1, 0, 0 };
+    res[as_index(neq_expr)] = { 2, 2, 2, 2, 2, 2 };
+    res[as_index(lt_expr)]  = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(gt_expr)]  = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(lte_expr)] = { 0, 0, 2, 1, 0, 0 };
+    res[as_index(gte_expr)] = { 0, 0, 2, 1, 0, 0 };
+
+    res[as_index(func_arg)]                   = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(func_arg_float_as_int)]      = { 1, 1, 1, 1, 1, 1 };
+    res[as_index(func_arg_on_stack)]          = { 2, 2, 2, 2, 2, 2 };
+    res[as_index(func_call_arg)]              = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(func_call_arg_float_as_int)] = { 0, 0, 0, 0, 0, 0 };
+    res[as_index(func_call_arg_on_stack)]     = { 0, 0, 0, 0, 0, 0 };
+
+    return res;
+}
+
+constexpr auto node_size_mapping = generate_size_mapping();
 
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,
@@ -158,3 +267,5 @@ constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::FUNC_DECL_DUMMY]    = */ rv_node_type::func_decl_dummy,
     /* [NodeType::RETURN_STAT]        = */ rv_node_type::return_statement,
 };
+
+

@@ -5,3 +5,4 @@ tex/*
 
 *.exe
 *.bak
+build*/

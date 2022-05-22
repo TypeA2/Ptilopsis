@@ -71,7 +71,7 @@
     <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
     <IntDir>build_vs\$(Configuration)\</IntDir>
     <ExecutablePath>$(DevEnvDir)CommonExtensions\Microsoft\CMake\Ninja\;$(ExecutablePath)</ExecutablePath>
-    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <AdditionalOptions>/std:c++latest</AdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -82,7 +82,7 @@
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
     <IntDir>build_vs\$(Configuration)\</IntDir>
-    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <AdditionalOptions>/std:c++latest</AdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -93,7 +93,7 @@
     <NMakePreprocessorDefinitions>WIN32;NDEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
     <IntDir>build_vs\$(Configuration)\</IntDir>
-    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <AdditionalOptions>/std:c++latest</AdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -105,7 +105,7 @@
     <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
     <IntDir>build_vs\$(Configuration)\</IntDir>
     <ExecutablePath>$(DevEnvDir)CommonExtensions\Microsoft\CMake\Ninja\;$(ExecutablePath)</ExecutablePath>
-    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <AdditionalOptions>/std:c++latest</AdditionalOptions>
   </PropertyGroup>
   <ItemDefinitionGroup>
@@ -113,13 +113,15 @@
   <ItemGroup>
     <ClInclude Include="include\codegen\rv_generator.hpp" />
     <ClInclude Include="include\codegen\rv_nodetype.hpp" />
-    <ClInclude Include="include\codegen\swap_buffer.hpp" />
+    <ClInclude Include="include\codegen\avx_buffer.hpp" />
+    <ClInclude Include="include\disassembler.h" />
     <ClInclude Include="include\simd.hpp" />
     <ClInclude Include="include\threading.hpp" />
     <ClInclude Include="include\utils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\codegen\rv_generator.cpp" />
+    <ClCompile Include="src\disassembler.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>

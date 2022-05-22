@@ -36,8 +36,11 @@
     <ClInclude Include="include\codegen\rv_nodetype.hpp">
       <Filter>Header Files\codegen</Filter>
     </ClInclude>
-    <ClInclude Include="include\codegen\swap_buffer.hpp">
+    <ClInclude Include="include\codegen\avx_buffer.hpp">
       <Filter>Header Files\codegen</Filter>
+    </ClInclude>
+    <ClInclude Include="include\disassembler.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -45,6 +48,9 @@
       <Filter>Source Files\codegen</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\disassembler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
