@@ -52,6 +52,8 @@ class avx_buffer {
         , _ptr { std::exchange(other._ptr, nullptr) } { }
 
     constexpr avx_buffer& operator=(avx_buffer&& other) noexcept {
+        clear();
+
         _count = std::exchange(other._count, 0);
         _ptr = std::exchange(other._ptr, nullptr);
 
@@ -138,13 +140,43 @@ class avx_buffer {
         return _ptr[_count - 1];
     }
 
-    void constexpr shrink_to(size_type new_size) {
+    [[nodiscard]] constexpr std::span<T> slice(size_type start, size_type end) const {
+        return { _ptr + start, _ptr + end };
+    }
+
+    constexpr void shrink_to(size_type new_size) {
         _count = std::min(new_size, _count);
     }
 
-    void clear() {
+    constexpr void clear() {
         operator delete(_ptr, std::align_val_t { AVX_ALIGNMENT });
         _ptr = nullptr;
         _count = 0;
     }
 };
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const avx_buffer<T>& buf) {
+    os << '[';
+
+    for (typename avx_buffer<T>::size_type i = 0; i < (buf.size() - 1); ++i) {
+        os << buf[i] << ", ";
+    }
+
+    os << buf.back() << ']';
+
+    return os;
+}
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::span<T> buf) {
+    os << '[';
+
+    for (size_t i = 0; i < (buf.size() - 1); ++i) {
+        os << buf[i] << ", ";
+    }
+
+    os << buf.back() << ']';
+
+    return os;
+}

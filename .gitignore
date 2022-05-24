@@ -6,3 +6,6 @@ tex/*
 *.exe
 *.bak
 build*/
+subprojects/packagecache/
+subprojects/fmt-*
+subprojects/magic_enum/

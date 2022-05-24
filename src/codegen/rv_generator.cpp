@@ -266,8 +266,6 @@ void rv_generator_st::isn_cnt() {
 void rv_generator_st::isn_gen() {
     size_t word_count = node_locations.back();
 
-    instructions = avx_buffer<uint32_t>::zero(word_count);
-
     // TODO Use i.e. radix sort for parallel sorting
     avx_buffer<uint32_t> idx_array { std::views::iota(uint32_t { 0 }, nodes) };
 
@@ -287,7 +285,25 @@ void rv_generator_st::isn_gen() {
 
     auto registers = avx_buffer<uint32_t>::zero(nodes * registers_per_node);
 
-    for (uint32_t v : depth_starts) {
-        std::cout << v << '\n';
+    std::cout << idx_array << '\n';
+
+    instructions = avx_buffer<uint32_t>::zero(word_count);
+    rd = avx_buffer<int64_t>::zero(word_count);
+    rs1 = avx_buffer<int64_t>::zero(word_count);
+    rs2 = avx_buffer<int64_t>::zero(word_count);
+    jt = avx_buffer<uint32_t>::zero(word_count);
+
+    // TODO more parallel
+    for (size_t i = 0; i < max_depth + 1; ++i) {
+        size_t current_depth = max_depth - i;
+
+        uint32_t start_index = depth_starts[current_depth];
+        uint32_t end_index = (current_depth == max_depth)
+            ? static_cast<uint32_t>(nodes)
+            : depth_starts[current_depth + 1];
+
+        std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
     }
+
+    
 }

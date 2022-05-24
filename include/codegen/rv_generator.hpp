@@ -31,6 +31,12 @@ class rv_generator {
     /* Generated RISC-V instructions, in 32-bit words */
     avx_buffer<uint32_t> instructions;
 
+    /* Per-instruction data */
+    avx_buffer<int64_t> rd;
+    avx_buffer<int64_t> rs1;
+    avx_buffer<int64_t> rs2;
+    avx_buffer<uint32_t> jt; /* jump target */
+
     /* Number of instructions for each node */
     avx_buffer<uint32_t> node_sizes;
 
