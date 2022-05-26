@@ -261,6 +261,9 @@ void rv_generator_st::isn_cnt() {
     std::ranges::rotate(node_locations, node_locations.end() - 1);
 
     node_locations[0] = 0;
+
+    auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
+    // TODO: make function table
 }
 
 void rv_generator_st::isn_gen() {
@@ -302,8 +305,10 @@ void rv_generator_st::isn_gen() {
             ? static_cast<uint32_t>(nodes)
             : depth_starts[current_depth + 1];
 
-        std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
-    }
+        //std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
 
-    
+        for (size_t idx : idx_array.slice(start_index, end_index)) {
+            
+        }
+    }
 }
