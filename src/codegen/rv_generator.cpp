@@ -202,58 +202,10 @@ void rv_generator_st::isn_cnt() {
         return base + delta;
     };
 
+    // TODO fixup
+
     
     std::ranges::transform(std::views::iota(uint32_t{ 0 }, nodes), node_sizes.begin(), node_count);
-
-    /*
-     * A(n)
-     * A register move is a single instruction:
-     *  - mv rd, rs
-     *  - fmv.s rd, rs
-     *  - fmv.x.w rd, rs1
-     *
-     * A store is also a single instruction:
-     *  - sw rs2, rs1 + offset
-     *  - fsw rs2, rs1 + offset
-     *
-     * When encountering a func_arg_list, check if the previous node is a func_call_arg,
-     *  if so add the number of arguments contained in the list to the call's node size.
-     *
-     *  Also add 1 instruction to allocate stack space for the arguments (always allocated, may be 0 bytes)
-     */
-    /*for (size_t i = 0; i < nodes; ++i) {
-        if (node_types[i] == func_call_arg_list
-            && (node_types[i - 1] & func_call_arg) == func_call_arg) {
-            
-            node_sizes[i] += (child_idx[i - 1] + 1 + 1);
-        }
-    }*/
-
-    /*
-     * C(n)
-     *
-     * Check if the parent node is a branching instruction
-     */
-    //for (size_t i = 0; i < nodes; ++i) {
-    //    if ((node_types[parents[i]] & if_statement) == if_statement
-
-            /*
-             * if, if/else and while are specified so that the lower bit indicates the index of the conditional,
-             * meaning this checks whether the current node is the conditional node belonging to the parent branch op.
-             */
-    //        && child_idx[i] == as_index(node_types[parents[i]] & 1)) {
-            /* This node is the conditional for a if, if_else or while */
-    //        node_sizes[i] += 1;
-    //    }
-    //}
-
-    /* Add padding for an unconditional jump after the if-block of an if_else */
-    //for (size_t i = 0; i < nodes; ++i) {
-    //    if (node_types[parents[i]] == if_else_statement
-    //        && child_idx[i] == 1) {
-    //        node_sizes[i] += 1;
-    //    }
-    //}
 
     /* Compute the actual instruction locations with an exclusive prefix sum */
     std::exclusive_scan(node_sizes.begin(), node_sizes.end(), node_locations.begin(), 0);
@@ -263,7 +215,42 @@ void rv_generator_st::isn_cnt() {
     node_locations[0] = 0;
 
     auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
-    // TODO: make function table
+
+    avx_buffer<uint32_t> func_decls {
+        std::views::filter(avx_buffer<uint32_t>::iota(nodes), [this](uint32_t i) {
+            return node_types[i] == func_decl;
+        })
+    };
+
+    avx_buffer<uint32_t> function_ids { func_decls.size() };
+    std::ranges::transform(func_decls, function_ids.begin(), [this](uint32_t i) {
+        return node_data[i];
+    });
+
+    avx_buffer<uint32_t> offsets { func_decls.size() };
+    std::ranges::transform(func_decls, offsets.begin(), [this](uint32_t i) {
+        return node_locations[i] + 6;
+    });
+
+    avx_buffer rotated_offsets { offsets };
+    std::ranges::rotate(rotated_offsets, rotated_offsets.end() - 1);
+    rotated_offsets[0] = 0;
+
+    auto function_sizes = avx_buffer<uint32_t>::iota(func_decls.size());
+    std::ranges::transform(function_sizes, function_sizes.begin(), [&offsets](uint32_t i) {
+        if (i == 0) {
+            return offsets[0];
+        }
+
+        return offsets[i] - offsets[i - 1];
+    });
+
+    for (size_t i = 0; i < func_decls.size(); ++i) {
+        std::cout << "Function " << function_ids[i]
+                  << " of node " << func_decls[i]
+                  << " at " << rotated_offsets[i]
+                  << " of size " << function_sizes[i] << '\n';
+    }
 }
 
 void rv_generator_st::isn_gen() {
@@ -297,6 +284,7 @@ void rv_generator_st::isn_gen() {
     jt = avx_buffer<uint32_t>::zero(word_count);
 
     // TODO more parallel
+    /* For every level*/
     for (size_t i = 0; i < max_depth + 1; ++i) {
         size_t current_depth = max_depth - i;
 
@@ -307,6 +295,7 @@ void rv_generator_st::isn_gen() {
 
         //std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
 
+        /* Iterate over all indices in this level */
         for (size_t idx : idx_array.slice(start_index, end_index)) {
             
         }

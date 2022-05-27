@@ -7,6 +7,18 @@
 
 #include "simd.hpp"
 
+/* template <std::ranges::range R> should work... */
+template <std::ranges::range R> 
+using range_element_type_t = std::remove_cvref_t<decltype(*std::ranges::begin(R {}))>;
+
+template <std::ranges::range R>
+auto range_to_vec(R&& range) {
+    std::vector<uint32_t> vec;
+    std::ranges::copy(std::forward<R>(range), std::back_inserter(vec));
+
+    return vec;
+}
+
 template <typename T>
 class avx_buffer {
     public:
@@ -25,6 +37,12 @@ class avx_buffer {
     size_type _count{};
     T* _ptr{};
 
+    void _resize(size_type new_count) {
+        clear();
+        _count = new_count;
+        _ptr = static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t { AVX_ALIGNMENT }));
+    }
+
     public:
 
     constexpr ~avx_buffer() { clear(); }
@@ -34,21 +52,52 @@ class avx_buffer {
         : _count { count }
         , _ptr { static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t{ AVX_ALIGNMENT })) } { }
 
-    template <std::ranges::input_range R>
+    template <std::ranges::sized_range R>
     constexpr explicit avx_buffer(R&& range) : avx_buffer { std::ranges::size(range) } {  // NOLINT(bugprone-forwarding-reference-overload)
         std::ranges::copy(range, _ptr);
     }
 
-    template <std::ranges::input_range R>
+    template <std::ranges::sized_range R>
     constexpr avx_buffer& operator=(R&& range) {
-        return *this = avx_buffer { range };  // NOLINT(misc-unconventional-assign-operator)
+        _resize(std::ranges::size(range));
+        std::ranges::copy(range, _ptr);
+
+        return *this;
+    }
+
+    template <typename R> requires !std::ranges::sized_range<R>
+    constexpr explicit avx_buffer(R&& range) {  // NOLINT(bugprone-forwarding-reference-overload)
+        auto vec = range_to_vec(range);
+        _resize(vec.size());
+        std::ranges::move(vec, _ptr);
+    }
+
+    template <typename R> requires !std::ranges::sized_range<R>
+    constexpr avx_buffer& operator=(R&& range) {
+        auto vec = range_to_vec(range);
+        _resize(vec.size());
+        std::ranges::move(vec, _ptr);
+
+        return *this;
+    }
+
+    constexpr explicit avx_buffer(std::span<T> elements) : avx_buffer { elements.size() } {
+        std::ranges::copy(elements, _ptr);
+    }
+
+    constexpr avx_buffer& operator=(std::span<T> elements) {
+        clear();
+        _count = elements.size();
+        std::ranges::copy(elements, _ptr);
+
+        return *this;
     }
 
     constexpr avx_buffer(const avx_buffer&) = delete;
     constexpr avx_buffer& operator=(const avx_buffer&) = delete;
 
     constexpr avx_buffer(avx_buffer&& other) noexcept
-        : _count(std::exchange(other._count, 0))
+        : _count { std::exchange(other._count, 0) }
         , _ptr { std::exchange(other._ptr, nullptr) } { }
 
     constexpr avx_buffer& operator=(avx_buffer&& other) noexcept {

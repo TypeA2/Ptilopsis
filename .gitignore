@@ -9,3 +9,4 @@ build*/
 subprojects/packagecache/
 subprojects/fmt-*
 subprojects/magic_enum/
+*.pdf
