@@ -167,11 +167,6 @@ void rv_generator_st::isn_cnt() {
     using enum rv_node_type;
 
     /* S(n) = S_b(n) + A(n) + C(n) */
-
-    /* S_b(n) */
-    //for (size_t i = 0; i < nodes; ++i) {
-    //    node_sizes[i] = node_size_mapping[as_index(node_types[i])][as_index(result_types[i])];
-    //}
     auto node_count = [this](uint32_t i) -> uint32_t {
         uint32_t base = node_size_mapping[as_index(node_types[i])][as_index(result_types[i])];
         uint32_t delta = 0;
@@ -187,33 +182,77 @@ void rv_generator_st::isn_cnt() {
         }
 
         if (node_types[i] != invalid) {
-            /* if/if_else */
-            if (child_idx[i] == 0 && (node_types[parents[i]] & 1) == 0) {  // NOLINT(bugprone-branch-clone)
-                delta += 1;
+            auto parent_type = node_types[parents[i]];
 
-                /* if_else: unconditional jump to jump over else block
-                 * while: conditional jump in conditional
+            if (child_idx[i] == 0 && (parent_type == if_statement || parent_type == if_else_statement)) {
+                /* if and if_else, first child, this is the conditional node */
+                delta += 1;
+            } else if (child_idx[i] == 1 && (parent_type == if_else_statement || parent_type == while_statement)) {
+                /* for if_else, this is the unconditional jump to jump over the second part,
+                 * for while, this is the first unconditional jump
                  */
-            } else if (child_idx[i] == 1 && (node_types[parents[i]] & 0b11) != 0) {
                 delta += 1;
             }
         }
-
         return base + delta;
     };
 
-    // TODO fixup
-
-    
     std::ranges::transform(std::views::iota(uint32_t{ 0 }, nodes), node_sizes.begin(), node_count);
 
     /* Compute the actual instruction locations with an exclusive prefix sum */
     std::exclusive_scan(node_sizes.begin(), node_sizes.end(), node_locations.begin(), 0);
 
-    std::ranges::rotate(node_locations, node_locations.end() - 1);
+    /* not needed as we can implement an exclusive prefix sum directly */
+    //std::ranges::rotate(node_locations, node_locations.end() - 1);
 
     node_locations[0] = 0;
 
+    /* instr_count_fix
+     * TODO probably not needed anymore
+     */
+    for (size_t i = 0; i < nodes; ++i) {
+        if (node_types[i] == invalid) {
+            // std::cout << "invalid node " << i << '\n';
+            node_locations[i] = 0xFFFFFFFF;
+        }
+    }
+
+    /* instr_count_fix_post */
+    avx_buffer<int32_t> fix_idx { nodes };
+    avx_buffer<uint32_t> fix_offsets { nodes };
+
+    for (size_t i = 0; i < nodes; ++i) {
+        if (parents[i] == -1 /* INVALID_NODE_IDX */) {
+            fix_idx[i] = -1;
+            fix_offsets[i] = 0;
+        } else {
+            auto parent_type = node_types[parents[i]];
+
+            /* Any conditional statement, lower bit represents the child index of the conditional node */
+            if (((parent_type & if_statement) == if_statement) && child_idx[i] == static_cast<int32_t>(parent_type & 1)) {
+                fix_idx[i] = parents[i];
+                fix_offsets[i] = node_locations[i] + node_size_mapping[as_index(node_types[i])][as_index(result_types[i])];
+
+            } else if ((node_types[i] & func_call_arg) == func_call_arg) {
+                fix_idx[i] = static_cast<int32_t>(i);
+
+                /* instr_call_arg_offset */
+                fix_offsets[i] = node_locations[parents[i]] + child_idx[i] + 1;
+            } else {
+                fix_idx[i] = -1;
+                fix_offsets[i] = 0;
+            }
+        }
+    }
+
+    /* scatter */
+    for (size_t i = 0; i < fix_idx.size(); ++i) {
+        if (fix_idx[i] >= 0) {
+            node_locations[fix_idx[i]] = fix_offsets[i];
+        }
+    }
+
+    /* Function table generation */
     auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
 
     avx_buffer<uint32_t> func_decls {
@@ -275,7 +314,7 @@ void rv_generator_st::isn_gen() {
 
     auto registers = avx_buffer<uint32_t>::zero(nodes * registers_per_node);
 
-    std::cout << idx_array << '\n';
+    //std::cout << idx_array << '\n';
 
     instructions = avx_buffer<uint32_t>::zero(word_count);
     rd = avx_buffer<int64_t>::zero(word_count);

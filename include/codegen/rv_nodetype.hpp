@@ -8,6 +8,7 @@
 #include <codegen/astnode.hpp>
 
 using namespace magic_enum::bitwise_operators;
+using namespace magic_enum::ostream_operators;
 
 /* Separate node type definitions because
  * at this point they're not typechecked anymore
@@ -182,7 +183,7 @@ constexpr auto generate_size_mapping() {
     res[as_index(logic_not_expr)] = { 1, 1, 1, 1, 1, 1 };
     res[as_index(neg_expr)]       = { 1, 1, 1, 1, 1, 1 };
 
-    res[as_index(literal_expr)]         = { 0, 0, 2, 3, 0, 0 };
+    res[as_index(literal_expr)]     = { 0, 0, 2, 3, 0, 0 };
     res[as_index(cast_expr)]        = { 1, 1, 1, 1, 1, 1 };
     res[as_index(deref_expr)]       = { 1, 1, 1, 1, 1, 1 };
     res[as_index(assign_expr)]      = { 2, 2, 2, 2, 2, 2 };

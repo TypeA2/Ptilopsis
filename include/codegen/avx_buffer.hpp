@@ -4,6 +4,7 @@
 #include <memory>
 #include <concepts>
 #include <ranges>
+#include <type_traits>
 
 #include "simd.hpp"
 
@@ -191,6 +192,16 @@ class avx_buffer {
 
     [[nodiscard]] constexpr std::span<T> slice(size_type start, size_type end) const {
         return { _ptr + start, _ptr + end };
+    }
+
+    template <typename U>
+        requires std::convertible_to<T, U> || (
+            std::is_enum_v<T> && std::integral<U> && (sizeof(U) >= sizeof(std::underlying_type_t<T>)))
+    [[nodiscard]] constexpr avx_buffer<U> cast() const {
+        avx_buffer<U> res { _count };
+        std::ranges::transform(*this, res.begin(), [](T v) { return static_cast<U>(v);  });
+
+        return res;
     }
 
     constexpr void shrink_to(size_type new_size) {
