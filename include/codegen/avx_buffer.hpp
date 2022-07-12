@@ -5,6 +5,7 @@
 #include <concepts>
 #include <ranges>
 #include <type_traits>
+#include <algorithm>
 
 #include "simd.hpp"
 

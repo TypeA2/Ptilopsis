@@ -15,7 +15,7 @@ if is_msvc
     add_project_arguments(
         [
             '/arch:AVX2',
-            '/std:c++latest',
+            '/std:c++20',
             '/DVC_EXTRALEAN', '/DNOMINMAX',
             '/external:anglebrackets', '/external:W3'
         ],

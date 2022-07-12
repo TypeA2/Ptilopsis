@@ -44,7 +44,6 @@ class rv_generator {
     avx_buffer<uint32_t> node_locations;
 
     public:
-    static constexpr size_t registers_per_node = 3;
 
     explicit rv_generator(const DepthTree& tree);
 

@@ -21,6 +21,8 @@
 
 #include <immintrin.h>
 
+#pragma warning(disable: 26451)
+
 rv_generator::rv_generator(const DepthTree& tree)
     : nodes          { tree.filledNodes() }
     , max_depth      { tree.maxDepth()    }
@@ -205,7 +207,7 @@ void rv_generator_st::isn_cnt() {
     /* not needed as we can implement an exclusive prefix sum directly */
     //std::ranges::rotate(node_locations, node_locations.end() - 1);
 
-    node_locations[0] = 0;
+    //node_locations[0] = 0;
 
     /* instr_count_fix
      * TODO probably not needed anymore
@@ -312,7 +314,8 @@ void rv_generator_st::isn_gen() {
 
     depth_starts.shrink_to(std::distance(depth_starts.begin(), removed.begin()));
 
-    auto registers = avx_buffer<uint32_t>::zero(nodes * registers_per_node);
+    /* Data propagation (ancillary) buffer */
+    auto registers = avx_buffer<uint32_t>::zero(nodes * parent_idx_per_node);
 
     //std::cout << idx_array << '\n';
 
@@ -321,6 +324,90 @@ void rv_generator_st::isn_gen() {
     rs1 = avx_buffer<int64_t>::zero(word_count);
     rs2 = avx_buffer<int64_t>::zero(word_count);
     jt = avx_buffer<uint32_t>::zero(word_count);
+
+    /* Retrieve the index to which we can write our results in the ancillary buffer (registers) */
+    auto get_parent_arg_idx = [this](uint32_t node, uint32_t instr_offset) -> int64_t {
+        auto parent_arg_idx = [&] {
+            /* par. 3.3.1 -> n * x + i */
+            return parents[node] * parent_idx_per_node + child_idx[node];
+        };
+
+        /* Use the lookup */
+        auto sub = [&]() -> int64_t {
+            // TODO make enum
+            /* Retrieve the type of lookup we use */
+            int8_t calc_type = parent_arg_idx_lookup[as_index(node_types[node])][instr_offset][as_index(result_types[node])];
+
+            switch (calc_type) {
+                case 1:
+                    /* 1 = just use the child index as a relative index */
+                    return parent_arg_idx();
+
+                case 2:
+                    /* 2 = use child index as relative index if the current node has a return value/type */
+                    if (as_index(result_types[node]) > 1) {
+                        return parent_arg_idx();
+                    }
+
+                    return -1;
+
+                default:
+                    return -1;
+            }
+        };
+
+        if (parents[node] == -1) {
+            /* a top-level node, use defeault method */
+            return sub();
+        } else {
+            auto parent = parents[node];
+
+            /* Current node is the non-conditional node of a control flow statement, place their results
+             * in their corresponding relative indices of the parent
+             */
+            if (child_idx[node] > 0 && (node_types[parent] == rv_node_type::if_statement || node_types[parent] == rv_node_type::if_else_statement)) {
+                return parent_arg_idx();
+            } else if ((child_idx[node] == 0 || child_idx[node] == 2) && node_types[parent] == rv_node_type::while_statement) {
+                return parent_arg_idx();
+            } else {
+                /* Any other node: use default lookup */
+                return sub();
+            }
+        }
+    };
+
+    auto get_data_prop_value = [this](uint32_t node, int64_t rd, int64_t instr_offset) {
+        if (parents[node] == -1) {
+            /* no parent node */
+            return rd;
+        } else {
+            auto parent_type = node_types[parents[node]];
+
+            /* current node's instruction offset + the number of instructions this node should require
+             * this is the current instruction's unique result register in our infinite register architecture
+             * (is this not the past-the-end position of the last related instruction?)
+             */
+            auto instr_no = instr_offset + node_size_mapping[as_index(node_types[node])][as_index(result_types[node])];
+
+            if (parent_type == rv_node_type::if_statement || parent_type == rv_node_type::if_else_statement) {
+                /* if the current node is the non-conditional child */
+                if (child_idx[node] == 1 || child_idx[node] == 2) {
+                    return instr_no;
+                } else {
+                    return rd;
+                }
+            } else if (parent_type == rv_node_type::while_statement) {
+                /* same as with if/if_else */
+                if (child_idx[node] == 0 || child_idx[node] == 2) {
+                    return instr_no;
+                } else {
+                    return rd;
+                }
+            } else {
+                return rd;
+            }
+        }
+    };
 
     // TODO more parallel
     /* For every level*/
@@ -332,11 +419,65 @@ void rv_generator_st::isn_gen() {
             ? static_cast<uint32_t>(nodes)
             : depth_starts[current_depth + 1];
 
-        //std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
+        std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
+
+        uint32_t level_size = end_index - start_index;
+
+        auto instruction_indices = avx_buffer<int32_t>::zero(level_size * 4);
+        auto parent_indices = avx_buffer<int32_t>::zero(level_size * 4);
+        auto current_instructions = avx_buffer<uint32_t>::zero(level_size * 4);
+        auto new_regs = avx_buffer<int64_t>::zero(level_size * 4);
+
+        uint32_t instr_idx = 0;
 
         /* Iterate over all indices in this level */
         for (size_t idx : idx_array.slice(start_index, end_index)) {
-            
+            /* Compile each node */
+            uint32_t instr_offset = node_locations[idx];
+
+            /* Every node generates at most 4 instructions
+             * has_instr_mapping[node_type][offset][result_type]
+             *   Whether a node of the specific node_type has an instruction at the specified offset in [0, 3],
+             *     given it's result_type is as specified.
+             *   The order for types is: [Invalid, Void, Int, Float, Int_ref, Float_ref].
+             *      For example, all literals cost 2 instructions, except floats, which can cost 3.
+             *  
+             */
+
+            /* compile_node returns a tuple (idx, parent_idx, instrs, new_regs)
+             * types (int, int, instruction, int)
+             * where idx scatters instrs and parent_idx scatters new_regs
+             * instrs contains opcodes, func fields and immediates
+             * new_regs for propagation
+             *  
+             * 
+             * These operations happen for each level
+             * 
+             * Each instruction has at most 4 instructions, for every possible instruction check whether
+             *  an actual instruction is placed at that relative index.
+             * 
+             */
+
+            // registers is the propagation buffer, a copy is used for each compile_node, and then it's updated
+            // after each level
+            for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
+                if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[i])]) {
+                    //std::cerr << "instruction at " << instr_offset << "\n";
+                } else if (i == 0) {
+                    //std::cerr << "start\n";
+                    instruction_indices[instr_idx] = -1;
+                    parent_indices[instr_idx] = get_parent_arg_idx(idx, 0);
+                    current_instructions[instr_idx] = 0;
+                    new_regs[instr_idx] = get_data_prop_value(idx, 0, instr_idx);
+                    std::cerr << "parent_index: " << parent_indices[instr_idx] << " for " << idx << ": " << new_regs[instr_idx] << '\n';
+                } else {
+                    // std::cerr << "empty\n";
+                    instruction_indices[instr_idx] = -1;
+                    parent_indices[instr_idx] = -1;
+                    current_instructions[instr_idx] = 0;
+                    new_regs[instr_idx] = 0;
+                }
+            }
         }
     }
 }
