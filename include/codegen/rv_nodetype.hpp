@@ -391,6 +391,367 @@ constexpr auto generate_parent_arg_idx_lookup() {
 
 constexpr auto parent_arg_idx_lookup = generate_parent_arg_idx_lookup();
 
+constexpr auto generate_get_output_table() {
+    using enum rv_node_type;
+
+    mapping_helper<std::array<ArrayForTypes<int8_t>, 4>, max_node_types> res;
+
+    ArrayForTypes<int8_t> zero { 0, 0, 0, 0, 0, 0 };
+
+    res[invalid]        = { zero, zero, zero, zero };
+    res[statement_list] = { zero, zero, zero, zero };
+    res[empty]          = { zero, zero, zero, zero };
+    res[expression]     = { zero, zero, zero, zero };
+
+    res[add_expr]       = { zero, zero, zero, zero };
+    res[sub_expr]       = { zero, zero, zero, zero };
+    res[mul_expr]       = { zero, zero, zero, zero };
+    res[div_expr]       = { zero, zero, zero, zero };
+    res[mod_expr]       = { zero, zero, zero, zero };
+    res[bitand_expr]    = { zero, zero, zero, zero };
+    res[bitor_expr]     = { zero, zero, zero, zero };
+    res[bitxor_expr]    = { zero, zero, zero, zero };
+    res[lshift_expr]    = { zero, zero, zero, zero };
+    res[rshift_expr]    = { zero, zero, zero, zero };
+    res[urshift_expr]   = { zero, zero, zero, zero };
+    res[logic_and_expr] = { zero, zero, zero, zero };
+    res[logic_or_expr]  = { zero, zero, zero, zero };
+
+    res[bitnot_expr]    = { zero, zero, zero, zero };
+    res[logic_not_expr] = { zero, zero, zero, zero };
+    res[neg_expr]       = { zero, zero, zero, zero };
+    
+    res[literal_expr]     = { zero, zero, zero, zero };
+    res[cast_expr]        = { zero, zero, zero, zero };
+    res[deref_expr]       = { zero, zero, zero, zero };
+    res[assign_expr]      = { zero, zero, zero, zero };
+    res[decl_expr]        = { zero, zero, zero, zero };
+    res[id_expr]          = { zero, zero, zero, zero };
+    res[while_dummy]      = { zero, zero, zero, zero };
+    res[func_decl_dummy]  = { zero, zero, zero, zero };
+    res[return_statement] = { ArrayForTypes<int8_t>{4, 4, 4, 3, 4, 4}, zero, zero, zero };
+
+    res[func_decl]     = { zero, zero, zero, zero };
+    res[func_arg_list] = { zero,  zero, zero, zero };
+
+    res[func_call_expression] = { zero, zero, zero, zero };
+    res[func_call_arg_list]   = { zero,  zero, zero, zero };
+
+    res[if_statement]      = { zero, zero, zero, zero };
+    res[while_statement]   = { zero, zero, zero, zero };
+    res[if_else_statement] = { zero, zero, zero, zero };
+
+    res[eq_expr]  = { zero, zero, zero, zero };
+    res[neq_expr] = { zero, zero, zero, zero };
+    res[lt_expr]  = { zero, zero, zero, zero };
+    res[gt_expr]  = { zero, zero, zero, zero };
+    res[lte_expr] = { zero, zero, zero, zero };
+    res[gte_expr] = { zero, zero, zero, zero };
+
+    res[func_arg]                   = { zero, zero, zero, zero };
+    res[func_arg_float_as_int]      = { zero, zero, zero, zero };
+    res[func_arg_on_stack]          = { zero, zero, zero, zero };
+    res[func_call_arg]              = { ArrayForTypes<int8_t>{0, 0, 1, 2, 0, 0}, zero, zero, zero};
+    res[func_call_arg_float_as_int] = { ArrayForTypes<int8_t>{1, 1, 1, 1, 1, 1}, zero, zero, zero };
+    res[func_call_arg_on_stack]     = { zero, zero, zero, zero };
+
+    return res.get();
+}
+
+constexpr auto get_output_table = generate_get_output_table();
+
+constexpr auto generate_instr_table() {
+    using enum rv_node_type;
+
+    mapping_helper<std::array<ArrayForTypes<uint32_t>, 4>, max_node_types> res;
+
+    uint32_t err = 0b0000000'00000'00000'000'00000'1110011;
+    ArrayForTypes<uint32_t> no_instr { err, err, err, err, err, err };
+
+    auto all_types = [](uint32_t val) {
+        return ArrayForTypes<uint32_t>{ val, val, val, val, val, val };
+    };
+
+    res[invalid]        = { no_instr, no_instr, no_instr, no_instr };
+    res[statement_list] = { no_instr, no_instr, no_instr, no_instr };
+    res[empty]          = { no_instr, no_instr, no_instr, no_instr };
+    res[expression]     = { no_instr, no_instr, no_instr, no_instr };
+
+    res[add_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* add, fadd.s */
+            err, err, 0b0000000'00000'00000'000'00000'0110011, 0b0000000'00000'00000'111'00000'1010011, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[sub_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* sub, fsub.s */
+            err, err, 0b0100000'00000'00000'000'00000'0110011, 0b0000100'00000'00000'111'00000'1010011, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[mul_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* mul, fmul.s */
+            err, err, 0b0000001'00000'00000'000'00000'0110011, 0b0001000'00000'00000'111'00000'1010011, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[div_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* div, fdiv.s */
+            err, err, 0b0000001'00000'00000'100'00000'0110011, 0b0001100'00000'00000'111'00000'1010011, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[mod_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* rem */
+            err, err, 0b0000001'00000'00000'110'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[bitand_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* and */
+            err, err, 0b0000000'00000'00000'111'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[bitor_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* or */
+            err, err, 0b0000000'00000'00000'110'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[bitxor_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* xor */
+            err, err, 0b0000000'00000'00000'100'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[lshift_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* sll */
+            err, err, 0b0000000'00000'00000'001'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[rshift_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* sra */
+            err, err, 0b0100000'00000'00000'101'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[urshift_expr] = {
+        ArrayForTypes<uint32_t> {
+            /* srl */
+            err, err, 0b0000000'00000'00000'101'00000'0110011, err, err, err
+        }, no_instr, no_instr, no_instr
+    };
+    res[logic_and_expr] = { no_instr, no_instr, no_instr, no_instr };
+    res[logic_or_expr]  = { no_instr, no_instr, no_instr, no_instr };
+
+    res[bitnot_expr] = {
+        /* xori with all 1's */
+        ArrayForTypes<uint32_t> { err, err, 0b1111111'11111'00000'100'00000'0010011, err, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[logic_not_expr] = {
+        /* sltiu */
+        ArrayForTypes<uint32_t> { err, err, 0b0000000'00001'00000'011'00000'0010011, err, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[neg_expr] = {
+        /* sub, fsgnjn.s */
+        ArrayForTypes<uint32_t> { err, err, 0b0100000'00000'00000'000'00000'0110011, 0b0010000'00000'00000'001'00000'1010011, err, err },
+        no_instr, no_instr, no_instr
+    };
+
+    res[literal_expr] = {
+        ArrayForTypes<uint32_t>
+        /* lui */
+        { err, err, 0b0000000'00000'00000'000'00000'0110111, 0b0000000'00000'00000'000'00000'0110111, err, err },
+        /* addi */
+        { err, err, 0b0000000'00000'00000'000'00000'0010011, 0b0000000'00000'00000'000'00000'0010011, err, err },
+
+        /* fmv.w.x */
+        { err, err,                                     err, 0b1111000'00000'00000'000'00000'1010011, err, err },
+        no_instr
+    };;
+    res[cast_expr] = {
+        /* fcvt.w.s, fcvt.s.w */
+        ArrayForTypes<uint32_t> { err, err, 0b1100000'00000'00000'111'00000'1010011, 0b1101000'00000'00000'111'00000'1010011, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[deref_expr] = {
+        /* lw, flw */
+        ArrayForTypes<uint32_t> { err, err, 0b0000000'00000'00000'010'00000'0000011, 0b0000000'00000'00000'010'00000'0000111, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[assign_expr] = {
+        /* sw, fsw */
+        ArrayForTypes<uint32_t>
+        { err, err, 0b0000000'00000'00000'010'00000'0100011, 0b0000000'00000'00000'010'00000'0100111, err, err },
+        /* add, fsgnj.s */
+        { err, err, 0b0000000'00000'00000'000'00000'0110011, 0b0010000'00000'00000'000'00000'1010011, err, err },
+        no_instr, no_instr
+    };
+
+    /* addi */
+    res[decl_expr]   = { all_types(0b0000000'00000'01000'000'00000'0010011), no_instr, no_instr, no_instr };
+    /* addi */
+    res[id_expr]     = { all_types(0b0000000'00000'01000'000'00000'0010011), no_instr, no_instr, no_instr };
+    res[while_dummy] = { no_instr, no_instr, no_instr, no_instr };
+    res[func_decl_dummy] = {
+        /* sw x1, 4092(x2) */
+        all_types(0b1111111'00001'00010'010'11100'0100011),
+        /* sw x8, 4088(x2) */
+        all_types(0b1111111'01000'00010'010'11000'0100011),
+        /* sub x2, x2, x8 */
+        all_types(0b0100000'01000'00010'000'00010'0110011),
+        /* add x8, x8, x2 */
+        all_types(0b0000000'00010'01000'000'01000'0110011)
+    };
+    res[return_statement] = { 
+        ArrayForTypes<uint32_t>
+        /* add, add, fsgnj.s*/
+        { err, 0b0000000'00000'00000'000'00000'0110011, 0b0000000'00000'00000'000'00000'0110011, 0b0010000'00000'00000'000'00000'1010011 },
+        /* jalr */
+        all_types(0b0000000'00000'00000'000'00000'1100111),
+        no_instr, no_instr
+    };
+
+    res[func_decl] = {
+        /* add sp, sp, x8 */
+        all_types(0b0000000'01000'00010'000'00010'0110011),
+
+        /* lw ra, 4092(sp) */
+        all_types(0b1111111'11100'00010'010'00001'0000011),
+
+        /* lw x8, 4088(x8) */
+        all_types(0b1111111'11000'01000'010'01000'0000011),
+
+        /* jalr x0, x1, 0 */
+        all_types(0b0000000'00000'00001'000'00000'1100111)
+    };
+    res[func_arg_list] = { no_instr, no_instr, no_instr, no_instr };
+
+    res[func_call_expression] = {
+        /* jalr x1, x0, 0*/
+        all_types(0b0000000'00000'00000'000'00001'1100111),
+        no_instr,
+
+        /* Store return value:
+         * add x0, x10, x0
+         * fsgnj.s x0, x10, x10
+         */
+        {
+            err, err,
+            0b0000000'00000'01010'000'00000'0110011,
+            0b0010000'01010'01010'000'00000'1010011,
+            err, err
+        },
+        no_instr
+    };
+    res[func_call_arg_list] = {
+        /* andi x2, x2, 0  */
+        all_types(0b0000000'00000'00010'111'00010'0010011),
+        /* ori x2, x2, 0 */
+        all_types(000000000'00000'00010'110'00010'0010011),
+        no_instr, no_instr
+    };
+
+    res[if_statement] = {
+        /* conditional branch */
+        all_types(0b0000000'00000'00000'000'00000'1100011), no_instr, no_instr, no_instr
+    };
+    res[while_statement] = {
+        /* conditional branch */
+        all_types(0b0000000'00000'00000'000'00000'1100011),
+        /* jalr */
+        all_types(0b0000000'00000'00000'000'00000'1100111),
+
+        no_instr, no_instr
+    };
+
+    res[if_else_statement] = {
+        /* conditional branch */
+        all_types(0b0000000'00000'00000'000'00000'1100011),
+        /* jalr */
+        all_types(0b0000000'00000'00000'000'00000'1100111),
+
+        no_instr, no_instr
+    };
+
+    res[eq_expr] = {
+        ArrayForTypes<uint32_t>
+        /* sub, feq.s */
+        { err, err, 0b0100000'00000'00000'000'00000'0110011, 0b1010000'00000'00000'010'00000'1010011, err, err },
+        /* sltiu */
+        { err, err, 0b0000000'00001'00000'011'00000'0010011, err, err, err },
+        no_instr, no_instr
+    };
+    res[neq_expr] = {
+        ArrayForTypes<uint32_t>
+        /* sub, feq.s */
+        { err, err, 0b0100000'00000'00000'000'00000'0110011, 0b1010000'00000'00000'010'00000'1010011, err, err },
+        /* sltu, sltiu */
+        { err, err, 0b0000000'00000'00000'011'00000'0110011, 0b0000000'00001'00000'011'00000'0010011, err, err },
+        no_instr, no_instr
+    };
+    res[lt_expr] = { 
+        ArrayForTypes<uint32_t>
+        /* slt, flt.s */
+        { err, err, 0b0000000'00000'00000'010'00000'0110011, 0b1010000'00000'00000'001'00000'1010011, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[gt_expr] = {
+        ArrayForTypes<uint32_t>
+        /* slt, flt.s */
+        { err, err, 0b0000000'00000'00000'010'00000'0110011, 0b1010000'00000'00000'001'00000'1010011, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[lte_expr] = {
+        ArrayForTypes<uint32_t>
+        /* slt, fle.s */
+        { err, err, 0b0000000'00000'00000'010'00000'0110011, 0b1010000'00000'00000'000'00000'1010011, err, err },
+        /* sltiu 1 */
+        { err, err, 0b0000000'00001'00000'011'00000'0010011, err, err, err }, no_instr, no_instr
+    };
+    res[gte_expr] = {
+        ArrayForTypes<uint32_t>
+        /* slt, fle.s */
+        { err, err, 0b0000000'00000'00000'010'00000'0110011, 0b1010000'00000'00000'000'00000'1010011, err, err },
+        /* sltiu 1 */
+        { err, err, 0b0000000'00001'00000'011'00000'0010011, err, err, err }, no_instr, no_instr
+    };
+
+    res[func_arg] = {
+        /* sw x0, 0(x0) */
+        ArrayForTypes<uint32_t> { err, err, err, err, 0b0000000'00000'00000'010'00000'0100011, 0b0000000'00000'00000'010'00000'0100011 }, no_instr, no_instr, no_instr
+    };
+
+    /* fmv.x.w */
+    res[func_arg_float_as_int] = { all_types(0b1110000'00000'00000'000'00000'1010011), no_instr, no_instr, no_instr };
+    res[func_arg_on_stack] = {
+        /* sw, fsw */
+        ArrayForTypes<uint32_t> { err, err, 0b0000000'00000'00000'010'00010'0100011, 0b0000000'00000'00000'010'00010'0100111, err, err },
+        no_instr, no_instr, no_instr
+    };
+    res[func_call_arg] = {
+        ArrayForTypes<uint32_t> {
+            err, err,
+            /* store argument in register */
+            0b0000000'00000'00000'000'00000'0110011, 0b0010000'000000'00000'000'00000'1010011,
+            err, err
+        }, no_instr, no_instr, no_instr
+    };
+
+    /* sw */
+    res[func_call_arg_float_as_int] = { all_types(0b0000000'00000'00000'010'00000'0100011), no_instr, no_instr, no_instr };
+    /* sw, sw */
+    res[func_call_arg_on_stack] = { all_types(0b0000000'00000'01000'010'00000'01000110), all_types(0b0000000'00000'00000'010'00000'0100011), no_instr, no_instr };
+
+    return res.get();
+}
+
+constexpr auto instr_table = generate_instr_table();
+
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,
     /* [NodeType::STATEMENT_LIST]     = */ rv_node_type::statement_list,

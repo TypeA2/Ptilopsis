@@ -286,6 +286,7 @@ void rv_generator_st::isn_cnt() {
         return offsets[i] - offsets[i - 1];
     });
 
+    return;
     for (size_t i = 0; i < func_decls.size(); ++i) {
         std::cout << "Function " << function_ids[i]
                   << " of node " << func_decls[i]
@@ -315,7 +316,7 @@ void rv_generator_st::isn_gen() {
     depth_starts.shrink_to(std::distance(depth_starts.begin(), removed.begin()));
 
     /* Data propagation (ancillary) buffer */
-    auto registers = avx_buffer<uint32_t>::zero(nodes * parent_idx_per_node);
+    auto registers = avx_buffer<int64_t>::zero(nodes * parent_idx_per_node);
 
     //std::cout << idx_array << '\n';
 
@@ -419,7 +420,7 @@ void rv_generator_st::isn_gen() {
             ? static_cast<uint32_t>(nodes)
             : depth_starts[current_depth + 1];
 
-        std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
+        //std::cout << current_depth << " (" << start_index << ", " << end_index << "): " << idx_array.slice(start_index, end_index) << '\n';
 
         uint32_t level_size = end_index - start_index;
 
@@ -463,13 +464,71 @@ void rv_generator_st::isn_gen() {
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
                 if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[i])]) {
                     //std::cerr << "instruction at " << instr_offset << "\n";
+                    uint32_t instr_in_buf = instr_idx + i;
+                    auto node_type = node_types[idx];
+                    auto data_type = result_types[idx];
+                    auto get_output_register = [this, idx, i, instr_in_buf](rv_node_type node_type, DataType resulting_type) -> int64_t {
+                        // TODO enum
+                        /* the type of calculation required to get the output register */
+                        auto calc_type = get_output_table[as_index(node_type)][i][as_index(resulting_type)];
+                        switch (calc_type) {
+                            case 1: return node_data[idx] + 10 /* func call arg: int
+                                                                * func call arg float as int: all 
+                                                                * -> so all args in int registers
+                                                                */;
+                            case 2: return node_data[idx] + 42; /* float call argument */
+                            case 3: return 32; /* return values: float */
+                            case 4: return 10; /* return values: invalid, void, int, int_ref, float_ref */
+                            default:
+                                if (as_index(resulting_type) > 1) {
+                                    return instr_in_buf + 64;
+                                }
+                        }
+                    };
+
+                    auto rd = get_output_register(node_type, result_types[idx]);
+
+                    auto get_instr_loc = [this](uint32_t node, uint32_t instr_in_buf, uint32_t relative_offset, avx_buffer<int64_t>& registers) -> int64_t {
+                        if (relative_offset == 1 && (node_types[node] == rv_node_type::if_else_statement)) {
+                            return registers[node * parent_idx_per_node + 1];
+                        } else if (relative_offset == 1 && node_types[node] == rv_node_type::while_statement) {
+                            return registers[node * parent_idx_per_node + 2];
+                        } else if ((relative_offset >= 2 && node_types[node] == rv_node_type::func_decl_dummy) || node_types[node] == rv_node_type::func_decl) {
+                            return instr_in_buf + 2;
+                        } else if (relative_offset == 1 && (node_types[node] == rv_node_type::func_call_arg_list)) {
+                            if (node == 0) {
+                                return instr_in_buf + 2;
+                            } else {
+                                auto prev_node = node - 1;
+                                auto res = instr_in_buf + 2;
+
+                                if (node_types[prev_node] == rv_node_type::func_call_arg
+                                    || node_types[prev_node] == rv_node_type::func_call_arg_float_as_int
+                                    || node_types[prev_node] == rv_node_type::func_call_arg_on_stack) {
+                                    res += child_idx[prev_node];
+                                }
+                            }
+                        } else {
+                            return instr_in_buf;
+                        }
+                    };
+
+                    // TODO per-node copy registers
+                    //std::cout << "rd for " << idx << ": " << rd << '\n';
+                    //std::cout <<  << " for " << idx << '\n';
+                    auto instr_loc = get_instr_loc(idx, node_locations[idx] + i, i, registers);
+
+                    instruction_indices[instr_idx] = instr_loc;
+                    parent_indices[instr_idx] = get_parent_arg_idx(idx, i);
+
+                    new_regs[instr_idx] = get_data_prop_value(idx, rd, node_locations[idx] + i);
                 } else if (i == 0) {
                     //std::cerr << "start\n";
                     instruction_indices[instr_idx] = -1;
                     parent_indices[instr_idx] = get_parent_arg_idx(idx, 0);
                     current_instructions[instr_idx] = 0;
                     new_regs[instr_idx] = get_data_prop_value(idx, 0, instr_idx);
-                    std::cerr << "parent_index: " << parent_indices[instr_idx] << " for " << idx << ": " << new_regs[instr_idx] << '\n';
+                    //std::cerr << "parent_index: " << parent_indices[instr_idx] << " for " << idx << ": " << new_regs[instr_idx] << '\n';
                 } else {
                     // std::cerr << "empty\n";
                     instruction_indices[instr_idx] = -1;
