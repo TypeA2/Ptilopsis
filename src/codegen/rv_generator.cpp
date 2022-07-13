@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <numeric>
 #include <bit>
+#include <bitset>
 
 #include <cmath>
 
@@ -513,6 +514,26 @@ void rv_generator_st::isn_gen() {
                         }
                     };
 
+                    auto extend = [](uint32_t x) {
+                        int32_t signed_x = x;
+                        /* sign extend by arithmetic right-shift */
+                        return static_cast<uint32_t>((signed_x << 20) >> 20);
+                    };
+
+                    auto instr_constant = [extend](rv_node_type type, uint32_t node_data, int64_t relative_offset) -> uint32_t {
+                        auto calc_type = instr_constant_table[as_index(type)][relative_offset];
+
+                        /* these are logical, explain */
+                        switch (calc_type) {
+                            case 1: return node_data - (extend(node_data & 0xFFF)) & 0xFFFFF000;
+                            case 2: return (node_data & 0xFFF) << 20;
+                            case 3: return (-(4 * (node_data + 2))) << 20;
+                            case 4: return (4 * node_data) << 20;
+                            case 5: return (-(4 * node_data)) << 20;
+                            default: return 0;
+                        }
+                    };
+
                     // TODO per-node copy registers
                     //std::cout << "rd for " << idx << ": " << rd << '\n';
                     //std::cout <<  << " for " << idx << '\n';
@@ -520,7 +541,10 @@ void rv_generator_st::isn_gen() {
 
                     instruction_indices[instr_idx] = instr_loc;
                     parent_indices[instr_idx] = get_parent_arg_idx(idx, i);
+                    current_instructions[instr_idx] = instr_table[as_index(node_type)][i][as_index(data_type)];
+                    current_instructions[instr_idx] |= instr_constant(node_type, node_data[idx], i);
 
+                    std::cout << "node " << idx << ": " << std::bitset<32>(current_instructions[instr_idx]) << '\n';
                     new_regs[instr_idx] = get_data_prop_value(idx, rd, node_locations[idx] + i);
                 } else if (i == 0) {
                     //std::cerr << "start\n";

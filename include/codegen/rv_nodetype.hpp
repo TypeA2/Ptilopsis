@@ -752,6 +752,75 @@ constexpr auto generate_instr_table() {
 
 constexpr auto instr_table = generate_instr_table();
 
+constexpr auto generate_instr_constant_table() {
+    using enum rv_node_type;
+
+    mapping_helper<std::array<int8_t, 4>, max_node_types> res;
+
+    std::array<int8_t, 4> zero { 0, 0, 0, 0 };
+
+    res[invalid]        = zero;
+    res[statement_list] = zero;
+    res[empty]          = zero;
+    res[expression]     = zero;
+
+    res[add_expr]       = zero;
+    res[sub_expr]       = zero;
+    res[mul_expr]       = zero;
+    res[div_expr]       = zero;
+    res[mod_expr]       = zero;
+    res[bitand_expr]    = zero;
+    res[bitor_expr]     = zero;
+    res[bitxor_expr]    = zero;
+    res[lshift_expr]    = zero;
+    res[rshift_expr]    = zero;
+    res[urshift_expr]   = zero;
+    res[logic_and_expr] = zero;
+    res[logic_or_expr]  = zero;
+
+    res[bitnot_expr]    = zero;
+    res[logic_not_expr] = zero;
+    res[neg_expr]       = zero;
+
+    res[literal_expr]     = { 1, 2, 0, 0 };
+    res[cast_expr]        = zero;
+    res[deref_expr]       = zero;
+    res[assign_expr]      = zero;
+    res[decl_expr]        = { 3, 0, 0, 0 };
+    res[id_expr]          = { 3, 0, 0, 0 };
+    res[while_dummy]      = zero;
+    res[func_decl_dummy]  = zero;
+    res[return_statement] = zero;
+
+    res[func_decl]     = zero;
+    res[func_arg_list] = zero;
+
+    res[func_call_expression] = zero;
+    res[func_call_arg_list]   = { 5, 4, 0, 0 };
+
+    res[if_statement]      = zero;
+    res[while_statement]   = zero;
+    res[if_else_statement] = zero;
+
+    res[eq_expr]  = zero;
+    res[neq_expr] = zero;
+    res[lt_expr]  = zero;
+    res[gt_expr]  = zero;
+    res[lte_expr] = zero;
+    res[gte_expr] = zero;
+
+    res[func_arg]                   = zero;
+    res[func_arg_float_as_int]      = zero;
+    res[func_arg_on_stack]          = { 4, 0, 0, 0 };
+    res[func_call_arg]              = zero;
+    res[func_call_arg_float_as_int] = zero;
+    res[func_call_arg_on_stack]     = { 4, 0, 0, 0 };
+
+    return res.get();
+}
+
+constexpr auto instr_constant_table = generate_instr_constant_table();
+
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,
     /* [NodeType::STATEMENT_LIST]     = */ rv_node_type::statement_list,
