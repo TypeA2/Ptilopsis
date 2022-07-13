@@ -652,7 +652,7 @@ constexpr auto generate_instr_table() {
         /* andi x2, x2, 0  */
         all_types(0b0000000'00000'00010'111'00010'0010011),
         /* ori x2, x2, 0 */
-        all_types(000000000'00000'00010'110'00010'0010011),
+        all_types(0b0000000'00000'00010'110'00010'0010011),
         no_instr, no_instr
     };
 

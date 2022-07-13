@@ -67,14 +67,14 @@ class avx_buffer {
         return *this;
     }
 
-    template <typename R> requires !std::ranges::sized_range<R>
+    template <typename R> requires (!std::ranges::sized_range<R>)
     constexpr explicit avx_buffer(R&& range) {  // NOLINT(bugprone-forwarding-reference-overload)
         auto vec = range_to_vec(range);
         _resize(vec.size());
         std::ranges::move(vec, _ptr);
     }
 
-    template <typename R> requires !std::ranges::sized_range<R>
+    template <typename R> requires (!std::ranges::sized_range<R>)
     constexpr avx_buffer& operator=(R&& range) {
         auto vec = range_to_vec(range);
         _resize(vec.size());

@@ -523,9 +523,9 @@ void rv_generator_st::isn_gen() {
                     auto instr_constant = [extend](rv_node_type type, uint32_t node_data, int64_t relative_offset) -> uint32_t {
                         auto calc_type = instr_constant_table[as_index(type)][relative_offset];
 
-                        /* these are logical, explain */
+                        // TODO these are logical, explain
                         switch (calc_type) {
-                            case 1: return node_data - (extend(node_data & 0xFFF)) & 0xFFFFF000;
+                            case 1: return (node_data - (extend(node_data & 0xFFF))) & 0xFFFFF000;
                             case 2: return (node_data & 0xFFF) << 20;
                             case 3: return (-(4 * (node_data + 2))) << 20;
                             case 4: return (4 * node_data) << 20;
@@ -544,9 +544,11 @@ void rv_generator_st::isn_gen() {
                     current_instructions[instr_idx] = instr_table[as_index(node_type)][i][as_index(data_type)];
                     current_instructions[instr_idx] |= instr_constant(node_type, node_data[idx], i);
 
-                    std::cout << "node " << idx << ": " << std::bitset<32>(current_instructions[instr_idx]) << '\n';
+                    std::cout << "node " << idx << ": " << std::bitset<32>(current_instructions[instr_idx])
+                            << " -> " << rvdisasm::instruction(current_instructions[instr_idx]) << '\n';
                     new_regs[instr_idx] = get_data_prop_value(idx, rd, node_locations[idx] + i);
                 } else if (i == 0) {
+                    /* if no instruction present, propagate */
                     //std::cerr << "start\n";
                     instruction_indices[instr_idx] = -1;
                     parent_indices[instr_idx] = get_parent_arg_idx(idx, 0);
