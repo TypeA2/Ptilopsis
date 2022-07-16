@@ -94,6 +94,8 @@ void rv_generator_st::process() {
     preprocess();
     isn_cnt();
     isn_gen();
+    optimize();
+    regalloc();
 }
 
 void rv_generator_st::preprocess() {
@@ -476,8 +478,12 @@ void rv_generator_st::isn_gen() {
             // registers is the propagation buffer, a copy is used for each compile_node, and then it's updated
             // after each level
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
+                auto local_registers = registers;
+                /* This corresponds to compile_node */
                 if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[i])]) {
-                    //std::cerr << "instruction at " << instr_offset << "\n";
+                    if (node_types[idx] == rv_node_type::func_decl_dummy) {
+                        std::cerr << "instruction at " << (instr_offset + i) << "\n";
+                    }
                     uint32_t instr_in_buf = instr_idx + i;
                     auto node_type = node_types[idx];
                     auto data_type = result_types[idx];
@@ -556,7 +562,7 @@ void rv_generator_st::isn_gen() {
                     // TODO per-node copy registers
                     //std::cout << "rd for " << idx << ": " << rd << '\n';
                     //std::cout <<  << " for " << idx << '\n';
-                    auto instr_loc = get_instr_loc(idx, node_locations[idx] + i, i, registers);
+                    auto instr_loc = get_instr_loc(idx, node_locations[idx] + i, i, local_registers);
                     //std::cout << instr_loc << '\n';
                     instruction_indices[instr_idx] = instr_loc;
                     parent_indices[instr_idx] = get_parent_arg_idx(idx, i);
@@ -578,7 +584,7 @@ void rv_generator_st::isn_gen() {
                             case 4: return registers[node * parent_idx_per_node + 1];
                             case 5: return registers[node * parent_idx_per_node + 1 - arg_no];
                             case 6: return registers[node * parent_idx_per_node];
-                            case 7: return node + 64 - 1;
+                            case 7: return relative_offset + 64 - 1;
                             default: return 0;
                         }
                     };
@@ -599,9 +605,9 @@ void rv_generator_st::isn_gen() {
                     };
 
                     current_rd[instr_idx] = rd;
-                    current_rs1[instr_idx] = node_get_instr_arg(idx, registers, 0, node_locations[idx] + i, i);
-                    current_rs2[instr_idx] = node_get_instr_arg(idx, registers, 1, node_locations[idx] + i, i);
-                    current_jt[instr_idx] = instr_jt(idx, i, registers);
+                    current_rs1[instr_idx] = node_get_instr_arg(idx, local_registers, 0, node_locations[idx] + i, i);
+                    current_rs2[instr_idx] = node_get_instr_arg(idx, local_registers, 1, node_locations[idx] + i, i);
+                    current_jt[instr_idx] = instr_jt(idx, i, local_registers);
 
                     /*std::cout << "node ";
                     if (idx < 10) {
@@ -632,6 +638,7 @@ void rv_generator_st::isn_gen() {
             }
         }
 
+        /* scatter data idx instrs */
         for (size_t i = 0; i < (level_size * 4); ++i) {
             if (instruction_indices[i] >= 0 && instruction_indices[i] < instructions.size()) {
                 instructions[instruction_indices[i]] = current_instructions[i];
@@ -641,10 +648,122 @@ void rv_generator_st::isn_gen() {
                 jt[instruction_indices[i]] = current_jt[i];
             }
         }
+
+        /* scatter registers parent_idx new_regs */
+        for (size_t i = 0; i < (level_size * 4); ++i) {
+            if (parent_indices[i] >= 0 && parent_indices[i] < registers.size()) {
+                registers[parent_indices[i]] = new_regs[i];
+            }
+        }
     }
 
     for (size_t i = 0; i < instructions.size(); ++i) {
-        std::cout << rvdisasm::instruction(instructions[i]) << " -> "
-            << rd[i] << ", " << rs1[i] << ", " << rs2[i] << ", " << jt[i] << '\n';
+        auto instr = rvdisasm::instruction(instructions[i], true);
+        std::cout << instr;
+        auto pad = 32 - instr.size();
+        for (size_t j = 0; j < pad; ++j) {
+            std::cout << ' ';
+        }
+
+        std::cout << std::setw(2) << std::setfill(' ') << rd[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs1[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs2[i] << ' '
+            << std::setw(2) << std::setfill(' ') << jt[i] << '\n';
     }
+}
+
+void rv_generator_st::optimize() {
+    auto initial_used_registers_length = 2 * instructions.size();
+    avx_buffer<int64_t> initial_used_registers { initial_used_registers_length };
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        initial_used_registers[2 * i] = rs1[i] - 64;
+        initial_used_registers[2 * i + 1] = rs2[i] - 64;
+    }
+    avx_buffer<bool> used_registers { instructions.size() };
+    // TODO bounds checking?
+    for (size_t i = 0; i < initial_used_registers_length; ++i) {
+        if (initial_used_registers[i] >= 0 && initial_used_registers[i] < instructions.size()) {
+            used_registers[initial_used_registers[i]] = true;
+        }
+    }
+
+    // TODO explain
+    auto can_remove = [this](uint32_t instr, std::span<bool> used) {
+        if (rd[instr] < 64) {
+            return false;
+        } else {
+            return !used[rd[instr] - 64];
+        }
+    };
+
+    auto has_side_effect = [](uint32_t instr_word) {
+        switch (instr_word & 0b0000000'00000'00000'111'00000'1111111) {
+            /* SW and FSW */
+            case 0b0000000'00000'00000'010'00000'0100011:
+            case 0b0000000'00000'00000'010'00000'0100111:
+                return true;
+
+            default:
+                return false;
+        }
+    };
+
+    bool cont = true;
+    while (cont) {
+        auto used_registers_cpy = used_registers;
+        avx_buffer<int64_t> newly_used { instructions.size() * 2 };
+        for (size_t i = 0; i < instructions.size(); ++i) {
+            if (can_remove(i, used_registers_cpy)) {
+                newly_used[2 * i] = rs1[i] - 64;
+                newly_used[2 * i + 1] = rs2[i] - 64;
+            } else {
+                newly_used[2 * i] = -1;
+                newly_used[2 * i + 1] = -1;
+            }
+        }
+
+        auto new_used_registers = used_registers;
+        for (size_t i = 0; i < newly_used.size(); ++i) {
+            if (newly_used[i] >= 0 && newly_used[i] < used_registers.size()) {
+                new_used_registers[newly_used[i]] = false;
+            }
+        }
+
+        avx_buffer<int64_t> side_effect_correct { instructions.size() * 2 };
+        for (size_t i = 0; i < instructions.size(); ++i) {
+            if (has_side_effect(instructions[i])) {
+                side_effect_correct[2 * i] = rs1[i] - 64;
+                side_effect_correct[2 * i + 1] = rs2[i] - 64;
+            } else {
+                side_effect_correct[2 * i] = -1;
+                side_effect_correct[2 * i + 1] = -1;
+            }
+        }
+
+        std::cout << "sideeffects: " << side_effect_correct << '\n';
+
+        auto result = new_used_registers;
+        for (size_t i = 0; i < side_effect_correct.size(); ++i) {
+            if (side_effect_correct[i] >= 0 && side_effect_correct[i] < result.size()) {
+                result[side_effect_correct[i]] = true;
+            }
+        }
+        
+        if (used_registers_cpy == result) {
+            cont = false;
+        }
+
+        used_registers = result;
+    }
+
+    used_instrs = avx_buffer<bool> { instructions.size() };
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        used_instrs[i] = rd[i] < 64 || used_registers[i];
+    }
+
+    std::cout << used_instrs.size() << ": " << used_instrs << '\n';
+}
+
+void rv_generator_st::regalloc() {
+
 }

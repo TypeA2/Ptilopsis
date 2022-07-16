@@ -95,8 +95,19 @@ class avx_buffer {
         return *this;
     }
 
-    constexpr avx_buffer(const avx_buffer&) = delete;
-    constexpr avx_buffer& operator=(const avx_buffer&) = delete;
+    constexpr avx_buffer(const avx_buffer& other) : avx_buffer { other._count } {
+        std::ranges::copy(other, _ptr);
+    }
+
+    constexpr avx_buffer& operator=(const avx_buffer& other) {
+        clear();
+
+        _count = other._count;
+        _ptr = static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t { AVX_ALIGNMENT }));
+        std::ranges::copy(other, _ptr);
+
+        return *this;
+    }
 
     constexpr avx_buffer(avx_buffer&& other) noexcept
         : _count { std::exchange(other._count, 0) }
@@ -240,4 +251,19 @@ std::ostream& operator<<(std::ostream& os, const std::span<T> buf) {
     os << buf.back() << ']';
 
     return os;
+}
+
+template <typename T>
+bool operator==(const avx_buffer<T>& lhs, const avx_buffer<T>& rhs) {
+    if (lhs.size() != rhs.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (lhs[i] != rhs[i]) {
+            return false;
+        }
+    }
+
+    return true;
 }

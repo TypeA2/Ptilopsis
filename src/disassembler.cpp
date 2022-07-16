@@ -332,8 +332,11 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
     return os;
 }
 
-std::string rvdisasm::instruction(uint32_t instr) {
+std::string rvdisasm::instruction(uint32_t instr, bool pad) {
     std::stringstream res;
+    if (pad) {
+        res << std::setw(9) << std::setfill(' ') << std::left;
+    }
     res << instr_name(instr) << ' ';
     format_args(res, instr);
 

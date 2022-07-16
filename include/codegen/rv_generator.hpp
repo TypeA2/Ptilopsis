@@ -47,6 +47,9 @@ class rv_generator {
     avx_buffer<uint32_t> func_starts;
     avx_buffer<uint32_t> func_ends;
 
+    /* Which instructions are actually enabled */
+    avx_buffer<bool> used_instrs;
+
     public:
 
     explicit rv_generator(const DepthTree& tree);
@@ -79,5 +82,7 @@ class rv_generator_st : public rv_generator {
     void preprocess();
     void isn_cnt();
     void isn_gen();
+    void optimize();
+    void regalloc();
 };
 

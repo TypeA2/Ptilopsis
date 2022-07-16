@@ -598,9 +598,9 @@ constexpr auto generate_instr_table() {
     res[id_expr]     = { all_types(0b0000000'00000'01000'000'00000'0010011), no_instr, no_instr, no_instr };
     res[while_dummy] = { no_instr, no_instr, no_instr, no_instr };
     res[func_decl_dummy] = {
-        /* sw x1, 4092(x2) */
+        /* sw x1, -4(x2) */
         all_types(0b1111111'00001'00010'010'11100'0100011),
-        /* sw x8, 4088(x2) */
+        /* sw x8, -8(x2) */
         all_types(0b1111111'01000'00010'010'11000'0100011),
         /* sub x2, x2, x8 */
         all_types(0b0100000'01000'00010'000'00010'0110011),
@@ -620,10 +620,10 @@ constexpr auto generate_instr_table() {
         /* add sp, sp, x8 */
         all_types(0b0000000'01000'00010'000'00010'0110011),
 
-        /* lw ra, 4092(sp) */
+        /* lw ra, -4(sp) */
         all_types(0b1111111'11100'00010'010'00001'0000011),
 
-        /* lw x8, 4088(x8) */
+        /* lw x8, -8(x8) */
         all_types(0b1111111'11000'01000'010'01000'0000011),
 
         /* jalr x0, x1, 0 */
