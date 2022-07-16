@@ -821,6 +821,154 @@ constexpr auto generate_instr_constant_table() {
 
 constexpr auto instr_constant_table = generate_instr_constant_table();
 
+constexpr auto generate_operand_table() {
+    using enum rv_node_type;
+
+    using arg_pair = std::array<int8_t, 2>;
+
+    mapping_helper<std::array<ArrayForTypes<arg_pair>, 4>, max_node_types> res;
+
+    ArrayForTypes<arg_pair> zero = { arg_pair{0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} };
+
+    auto make = [](arg_pair a, arg_pair b, arg_pair c, arg_pair d, arg_pair e, arg_pair f) {
+        return ArrayForTypes<arg_pair> { a, b, c, d, e, f };
+    };
+
+    auto make_all = [make](arg_pair p) {
+        return make(p, p, p, p, p, p);
+    };
+
+    res[invalid]        = { zero, zero, zero, zero };
+    res[statement_list] = { zero, zero, zero, zero };
+    res[empty]          = { zero, zero, zero, zero };
+    res[expression]     = { zero, zero, zero, zero };
+
+    res[add_expr]       = { make_all({1,1}), zero, zero, zero };
+    res[sub_expr]       = { make_all({1,1}), zero, zero, zero };
+    res[mul_expr]       = { make_all({1,1}), zero, zero, zero };
+    res[div_expr]       = { make_all({1,1}), zero, zero, zero };
+    res[mod_expr]       = { make_all({1,1}), zero, zero, zero };
+    res[bitand_expr]    = { make_all({1,1}), zero, zero, zero };
+    res[bitor_expr]     = { make_all({1,1}), zero, zero, zero };
+    res[bitxor_expr]    = { make_all({1,1}), zero, zero, zero };
+    res[lshift_expr]    = { make_all({1,1}), zero, zero, zero };
+    res[rshift_expr]    = { make_all({1,1}), zero, zero, zero };
+    res[urshift_expr]   = { make_all({1,1}), zero, zero, zero };
+    res[logic_and_expr] = { zero, zero, zero, zero };
+    res[logic_or_expr]  = { zero, zero, zero, zero };
+
+    res[bitnot_expr]    = { zero, zero, zero, zero };
+    res[logic_not_expr] = { zero, zero, zero, zero };
+    res[neg_expr]       = { zero, zero, zero, zero };
+
+    res[literal_expr]     = { zero, make_all({7,0}), make({0,0}, {0,0}, {0,0}, {7,0}, {0,0}, {0,0}), zero };
+    res[cast_expr]        = { make_all({1,0}), zero, zero, zero };
+    res[deref_expr]       = { make_all({1,0}), zero, zero, zero };
+    res[assign_expr]      = { make_all({1,1}), make({4,0}, {4,0}, {4,0}, {4,4}, {4,0}, {4,0}), zero, zero };
+    res[decl_expr]        = { zero, zero, zero, zero };
+    res[id_expr]          = { zero, zero, zero, zero };
+    res[while_dummy]      = { zero, zero, zero, zero };
+    res[func_decl_dummy]  = { zero, zero, zero, zero };
+    res[return_statement] = { make({0,0}, {0,0}, {1,0}, {1,0}, {0,0}, {0,0}), zero, zero, zero };
+
+    res[func_decl]     = { zero, zero, zero, zero };
+    res[func_arg_list] = { zero, zero, zero, zero };
+
+    res[func_call_expression] = { zero, zero, zero, zero };
+    res[func_call_arg_list]   = { zero, zero, zero, zero };
+
+    res[if_statement]      = { make({1,0}, {1,0}, {1,0}, {1,0}, {1,2}, {1,3}), zero, zero, zero };
+    res[while_statement]   = { make({4,0}, {4,0}, {4,0}, {4,0}, {4,0}, {4,0}), zero, zero, zero};
+    res[if_else_statement] = { make({1,0}, {1,0}, {1,0}, {1,0}, {1,0}, {1,0}), zero, zero, zero};
+
+    res[eq_expr]  = { make_all({1,1}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
+    res[neq_expr] = { make_all({1,1}), make({0,0}, {0,0}, {0,7}, {7,0}, {0,0}, {0,0}), zero, zero };
+    res[lt_expr]  = { make_all({1,1}), zero, zero, zero };
+    res[gt_expr]  = { make_all({5,5}), zero, zero, zero };
+    res[lte_expr] = { make({0,0}, {0,0}, {5,5}, {1,1}, {0,0}, {0,0}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
+    res[gte_expr] = { make({0,0}, {0,0}, {1,1}, {5,5}, {0,0}, {0,0}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
+
+    res[func_arg]                   = { zero, zero, zero, zero };
+    res[func_arg_float_as_int]      = { make_all({1,2}), zero, zero, zero };
+    res[func_arg_on_stack]          = { zero, make_all({1,7}), zero, zero };
+    res[func_call_arg]              = { make({1,0}, {1,0}, {1,0}, {1,6}, {1,0}, {1,0}), zero, zero, zero };
+    res[func_call_arg_float_as_int] = { make_all({1,0}), zero, zero, zero };
+    res[func_call_arg_on_stack]     = { make_all({6,0}), zero, zero, zero };
+
+    return res.get();
+}
+
+constexpr auto operand_table = generate_operand_table();
+
+constexpr auto generate_instr_jt_table() {
+    using enum rv_node_type;
+
+    mapping_helper<std::array<int8_t, 4>, max_node_types> res;
+
+    std::array<int8_t, 4> zero { 0, 0, 0, 0 };
+
+    res[invalid]        = zero;
+    res[statement_list] = zero;
+    res[empty]          = zero;
+    res[expression]     = zero;
+
+    res[add_expr]       = zero;
+    res[sub_expr]       = zero;
+    res[mul_expr]       = zero;
+    res[div_expr]       = zero;
+    res[mod_expr]       = zero;
+    res[bitand_expr]    = zero;
+    res[bitor_expr]     = zero;
+    res[bitxor_expr]    = zero;
+    res[lshift_expr]    = zero;
+    res[rshift_expr]    = zero;
+    res[urshift_expr]   = zero;
+    res[logic_and_expr] = zero;
+    res[logic_or_expr]  = zero;
+
+    res[bitnot_expr]    = zero;
+    res[logic_not_expr] = zero;
+    res[neg_expr]       = zero;
+
+    res[literal_expr]     = zero;
+    res[cast_expr]        = zero;
+    res[deref_expr]       = zero;
+    res[assign_expr]      = zero;
+    res[decl_expr]        = zero;
+    res[id_expr]          = zero;
+    res[while_dummy]      = zero;
+    res[func_decl_dummy]  = zero;
+    res[return_statement] = { 0, 6, 0, 0 };
+
+    res[func_decl]     = zero;
+    res[func_arg_list] = zero;
+
+    res[func_call_expression] = { 7, 0, 0, 0 };
+    res[func_call_arg_list]   = zero;
+
+    res[if_statement]      = { 1, 0, 0, 0 };
+    res[while_statement]   = { 4, 5, 0, 0 };
+    res[if_else_statement] = { 2, 3, 0, 0 };
+
+    res[eq_expr]  = zero;
+    res[neq_expr] = zero;
+    res[lt_expr]  = zero;
+    res[gt_expr]  = zero;
+    res[lte_expr] = zero;
+    res[gte_expr] = zero;
+
+    res[func_arg]                   = zero;
+    res[func_arg_float_as_int]      = zero;
+    res[func_arg_on_stack]          = zero;
+    res[func_call_arg]              = zero;
+    res[func_call_arg_float_as_int] = zero;
+    res[func_call_arg_on_stack]     = zero;
+
+    return res.get();
+}
+
+constexpr auto instr_jt_table = generate_instr_jt_table();
+
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,
     /* [NodeType::STATEMENT_LIST]     = */ rv_node_type::statement_list,

@@ -43,6 +43,10 @@ class rv_generator {
     /* Location indices for each node */
     avx_buffer<uint32_t> node_locations;
 
+    /* Start and end indices of all functions */
+    avx_buffer<uint32_t> func_starts;
+    avx_buffer<uint32_t> func_ends;
+
     public:
 
     explicit rv_generator(const DepthTree& tree);

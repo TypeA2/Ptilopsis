@@ -287,6 +287,12 @@ void rv_generator_st::isn_cnt() {
         return offsets[i] - offsets[i - 1];
     });
 
+    func_starts = rotated_offsets;
+    func_ends = rotated_offsets;
+    for (size_t i = 0; i < func_ends.size(); ++i) {
+        func_ends[i] += function_sizes[i];
+    }
+
     return;
     for (size_t i = 0; i < func_decls.size(); ++i) {
         std::cout << "Function " << function_ids[i]
@@ -425,14 +431,20 @@ void rv_generator_st::isn_gen() {
 
         uint32_t level_size = end_index - start_index;
 
+        uint32_t instr_idx = 0;
+
         auto instruction_indices = avx_buffer<int32_t>::zero(level_size * 4);
         auto parent_indices = avx_buffer<int32_t>::zero(level_size * 4);
         auto current_instructions = avx_buffer<uint32_t>::zero(level_size * 4);
         auto new_regs = avx_buffer<int64_t>::zero(level_size * 4);
+        auto current_rd = avx_buffer<int64_t>::zero(level_size * 4);
+        auto current_rs1 = avx_buffer<int64_t>::zero(level_size * 4);
+        auto current_rs2 = avx_buffer<int64_t>::zero(level_size * 4);
+        auto current_jt = avx_buffer<int64_t>::zero(level_size * 4);
 
-        uint32_t instr_idx = 0;
-
-        /* Iterate over all indices in this level */
+        /* Iterate over all indices in this level
+         * Note: this corresponds to the inner `let` of compile_tree, containing the mapping to compile_node
+         */
         for (size_t idx : idx_array.slice(start_index, end_index)) {
             /* Compile each node */
             uint32_t instr_offset = node_locations[idx];
@@ -460,6 +472,7 @@ void rv_generator_st::isn_gen() {
              * 
              */
 
+            
             // registers is the propagation buffer, a copy is used for each compile_node, and then it's updated
             // after each level
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
@@ -481,6 +494,7 @@ void rv_generator_st::isn_gen() {
                             case 3: return 32; /* return values: float */
                             case 4: return 10; /* return values: invalid, void, int, int_ref, float_ref */
                             default:
+                                /* if there's a return value at all */
                                 if (as_index(resulting_type) > 1) {
                                     return instr_in_buf + 64;
                                 }
@@ -525,11 +539,16 @@ void rv_generator_st::isn_gen() {
 
                         // TODO these are logical, explain
                         switch (calc_type) {
+                            /* lui -> only upper 20 bits, in-place */
                             case 1: return (node_data - (extend(node_data & 0xFFF))) & 0xFFFFF000;
+                            /* addi -> lower 12 bits, in the top 12 bits of the instruction word */
                             case 2: return (node_data & 0xFFF) << 20;
-                            case 3: return (-(4 * (node_data + 2))) << 20;
+                            /* func call arg list, so setting up the stackframe for the call (?) */
+                            case 3: return (-(4 * (static_cast<int32_t>(node_data) + 2))) << 20;
+                            /* func arg on stack, so stack offset to above the current sp */
                             case 4: return (4 * node_data) << 20;
-                            case 5: return (-(4 * node_data)) << 20;
+                            /* func arg list, so also an offset, but to below the current sp */
+                            case 5: return (-(4 * static_cast<int32_t>(node_data))) << 20;
                             default: return 0;
                         }
                     };
@@ -538,14 +557,62 @@ void rv_generator_st::isn_gen() {
                     //std::cout << "rd for " << idx << ": " << rd << '\n';
                     //std::cout <<  << " for " << idx << '\n';
                     auto instr_loc = get_instr_loc(idx, node_locations[idx] + i, i, registers);
-
+                    //std::cout << instr_loc << '\n';
                     instruction_indices[instr_idx] = instr_loc;
                     parent_indices[instr_idx] = get_parent_arg_idx(idx, i);
                     current_instructions[instr_idx] = instr_table[as_index(node_type)][i][as_index(data_type)];
                     current_instructions[instr_idx] |= instr_constant(node_type, node_data[idx], i);
 
-                    std::cout << "node " << idx << ": " << std::bitset<32>(current_instructions[instr_idx])
-                            << " -> " << rvdisasm::instruction(current_instructions[instr_idx]) << '\n';
+                    auto node_get_instr_arg = [this](uint32_t node, avx_buffer<int64_t>& registers,
+                        int64_t arg_no, int64_t instr_in_buf, int64_t relative_offset) -> int64_t {
+                        auto calc_type = operand_table[as_index(node_types[node])][relative_offset][as_index(result_types[node])][arg_no];
+
+                        switch (calc_type) {
+                            // TODO make these make sense
+                            /* simple relative args */
+                            case 1: return registers[node * parent_idx_per_node + arg_no];
+                            /* float as int arg and if-statement int_ref arg 2 */
+                            case 2: return node_data[node] + 10;
+                            /* if-statement float_ref arg 2 */
+                            case 3: return node_data[node] + 42;
+                            case 4: return registers[node * parent_idx_per_node + 1];
+                            case 5: return registers[node * parent_idx_per_node + 1 - arg_no];
+                            case 6: return registers[node * parent_idx_per_node];
+                            case 7: return node + 64 - 1;
+                            default: return 0;
+                        }
+                    };
+
+                    auto instr_jt = [this](uint32_t node, int64_t relative_offset, avx_buffer<int64_t>& registers) -> int64_t {
+                        auto calc_type = instr_jt_table[as_index(node_types[node])][relative_offset];
+
+                        switch (calc_type) {
+                            case 1: return registers[node * parent_idx_per_node + 1];
+                            case 2: return registers[node * parent_idx_per_node + 1] + 1;
+                            case 3: return registers[node * parent_idx_per_node + 2];
+                            case 4: return registers[node * parent_idx_per_node + 2] + 1;
+                            case 5: return registers[node * parent_idx_per_node];
+                            case 6: return func_ends[node_data[node]] - 6;
+                            case 7: return func_starts[node_data[node]];
+                            default: return 0;
+                        }
+                    };
+
+                    current_rd[instr_idx] = rd;
+                    current_rs1[instr_idx] = node_get_instr_arg(idx, registers, 0, node_locations[idx] + i, i);
+                    current_rs2[instr_idx] = node_get_instr_arg(idx, registers, 1, node_locations[idx] + i, i);
+                    current_jt[instr_idx] = instr_jt(idx, i, registers);
+
+                    /*std::cout << "node ";
+                    if (idx < 10) {
+                        std::cout << ' ';
+                    }
+                    std::cout << idx << ": "
+                        << "rd: " << current_rd[instr_idx]
+                        << ", rs1: " << current_rs1[instr_idx]
+                        << ", rs2: " << current_rs2[instr_idx]
+                        << ", jt: " << current_jt[instr_idx]
+                        << " -> " << rvdisasm::instruction(current_instructions[instr_idx]) << '\n';*/
                     new_regs[instr_idx] = get_data_prop_value(idx, rd, node_locations[idx] + i);
                 } else if (i == 0) {
                     /* if no instruction present, propagate */
@@ -564,5 +631,20 @@ void rv_generator_st::isn_gen() {
                 }
             }
         }
+
+        for (size_t i = 0; i < (level_size * 4); ++i) {
+            if (instruction_indices[i] >= 0 && instruction_indices[i] < instructions.size()) {
+                instructions[instruction_indices[i]] = current_instructions[i];
+                rd[instruction_indices[i]] = current_rd[i];
+                rs1[instruction_indices[i]] = current_rs1[i];
+                rs2[instruction_indices[i]] = current_rs2[i];
+                jt[instruction_indices[i]] = current_jt[i];
+            }
+        }
+    }
+
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        std::cout << rvdisasm::instruction(instructions[i]) << " -> "
+            << rd[i] << ", " << rs1[i] << ", " << rs2[i] << ", " << jt[i] << '\n';
     }
 }
