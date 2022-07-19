@@ -96,6 +96,9 @@ constexpr size_t max_node_types = 1 << (sizeof(rv_node_type_t) * std::numeric_li
 
 constexpr size_t parent_idx_per_node = 3;
 
+constexpr uint64_t preserved_register_mask = 0x0FFC0300'0FFC031F;
+constexpr uint64_t nonscratch_registers = 0x0FFC0300'0FFC0200;
+
 template <>
 struct magic_enum::customize::enum_range<rv_node_type> {
     static constexpr int min = 0;

@@ -123,14 +123,18 @@ class avx_buffer {
     }
 
     [[nodiscard]] static constexpr avx_buffer zero(size_type count) {
-        avx_buffer buf { count };
-        std::ranges::fill(buf, 0);
-
-        return buf;
+        return fill(count, 0);
     }
 
     [[nodiscard]] static constexpr avx_buffer iota(size_type bound) {
         return avx_buffer { std::views::iota(T{ 0 }, bound) };
+    }
+
+    [[nodiscard]] static constexpr avx_buffer fill(size_type count, T val) {
+        avx_buffer buf { count };
+        std::ranges::fill(buf, val);
+
+        return buf;
     }
 
     [[nodiscard]] constexpr size_type size() const {

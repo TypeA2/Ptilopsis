@@ -21,6 +21,7 @@
 #include <cmath>
 
 #include <immintrin.h>
+#include <intrin.h>
 
 #pragma warning(disable: 26451)
 
@@ -280,7 +281,7 @@ void rv_generator_st::isn_cnt() {
     std::ranges::rotate(rotated_offsets, rotated_offsets.end() - 1);
     rotated_offsets[0] = 0;
 
-    auto function_sizes = avx_buffer<uint32_t>::iota(func_decls.size());
+    function_sizes = avx_buffer<uint32_t>::iota(func_decls.size());
     std::ranges::transform(function_sizes, function_sizes.begin(), [&offsets](uint32_t i) {
         if (i == 0) {
             return offsets[0];
@@ -481,9 +482,9 @@ void rv_generator_st::isn_gen() {
                 auto local_registers = registers;
                 /* This corresponds to compile_node */
                 if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[i])]) {
-                    if (node_types[idx] == rv_node_type::func_decl_dummy) {
-                        std::cerr << "instruction at " << (instr_offset + i) << "\n";
-                    }
+                    //if (node_types[idx] == rv_node_type::func_decl_dummy) {
+                    //    std::cerr << "instruction at " << (instr_offset + i) << "\n";
+                    //}
                     uint32_t instr_in_buf = instr_idx + i;
                     auto node_type = node_types[idx];
                     auto data_type = result_types[idx];
@@ -504,6 +505,7 @@ void rv_generator_st::isn_gen() {
                                 if (as_index(resulting_type) > 1) {
                                     return instr_in_buf + 64;
                                 }
+                                return 0;
                         }
                     };
 
@@ -528,6 +530,8 @@ void rv_generator_st::isn_gen() {
                                     || node_types[prev_node] == rv_node_type::func_call_arg_on_stack) {
                                     res += child_idx[prev_node];
                                 }
+
+                                return res;
                             }
                         } else {
                             return instr_in_buf;
@@ -562,10 +566,10 @@ void rv_generator_st::isn_gen() {
                     // TODO per-node copy registers
                     //std::cout << "rd for " << idx << ": " << rd << '\n';
                     //std::cout <<  << " for " << idx << '\n';
-                    auto instr_loc = get_instr_loc(idx, node_locations[idx] + i, i, local_registers);
+                    auto instr_loc = get_instr_loc(static_cast<uint32_t>(idx), node_locations[idx] + i, i, local_registers);
                     //std::cout << instr_loc << '\n';
-                    instruction_indices[instr_idx] = instr_loc;
-                    parent_indices[instr_idx] = get_parent_arg_idx(idx, i);
+                    instruction_indices[instr_idx] = static_cast<int32_t>(instr_loc);
+                    parent_indices[instr_idx] = static_cast<int32_t>(get_parent_arg_idx(static_cast<uint32_t>(idx), i));
                     current_instructions[instr_idx] = instr_table[as_index(node_type)][i][as_index(data_type)];
                     current_instructions[instr_idx] |= instr_constant(node_type, node_data[idx], i);
 
@@ -605,9 +609,9 @@ void rv_generator_st::isn_gen() {
                     };
 
                     current_rd[instr_idx] = rd;
-                    current_rs1[instr_idx] = node_get_instr_arg(idx, local_registers, 0, node_locations[idx] + i, i);
-                    current_rs2[instr_idx] = node_get_instr_arg(idx, local_registers, 1, node_locations[idx] + i, i);
-                    current_jt[instr_idx] = instr_jt(idx, i, local_registers);
+                    current_rs1[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 0, node_locations[idx] + i, i);
+                    current_rs2[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 1, node_locations[idx] + i, i);
+                    current_jt[instr_idx] = instr_jt(static_cast<uint32_t>(idx), i, local_registers);
 
                     /*std::cout << "node ";
                     if (idx < 10) {
@@ -619,14 +623,14 @@ void rv_generator_st::isn_gen() {
                         << ", rs2: " << current_rs2[instr_idx]
                         << ", jt: " << current_jt[instr_idx]
                         << " -> " << rvdisasm::instruction(current_instructions[instr_idx]) << '\n';*/
-                    new_regs[instr_idx] = get_data_prop_value(idx, rd, node_locations[idx] + i);
+                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), rd, node_locations[idx] + i);
                 } else if (i == 0) {
                     /* if no instruction present, propagate */
                     //std::cerr << "start\n";
                     instruction_indices[instr_idx] = -1;
-                    parent_indices[instr_idx] = get_parent_arg_idx(idx, 0);
+                    parent_indices[instr_idx] = static_cast<int32_t>(get_parent_arg_idx(static_cast<uint32_t>(idx), 0));
                     current_instructions[instr_idx] = 0;
-                    new_regs[instr_idx] = get_data_prop_value(idx, 0, instr_idx);
+                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), 0, instr_idx);
                     //std::cerr << "parent_index: " << parent_indices[instr_idx] << " for " << idx << ": " << new_regs[instr_idx] << '\n';
                 } else {
                     // std::cerr << "empty\n";
@@ -645,7 +649,7 @@ void rv_generator_st::isn_gen() {
                 rd[instruction_indices[i]] = current_rd[i];
                 rs1[instruction_indices[i]] = current_rs1[i];
                 rs2[instruction_indices[i]] = current_rs2[i];
-                jt[instruction_indices[i]] = current_jt[i];
+                jt[instruction_indices[i]] = static_cast<uint32_t>(current_jt[i]);
             }
         }
 
@@ -657,6 +661,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
+    return;
     for (size_t i = 0; i < instructions.size(); ++i) {
         auto instr = rvdisasm::instruction(instructions[i], true);
         std::cout << instr;
@@ -682,7 +687,7 @@ void rv_generator_st::optimize() {
     avx_buffer<bool> used_registers { instructions.size() };
     // TODO bounds checking?
     for (size_t i = 0; i < initial_used_registers_length; ++i) {
-        if (initial_used_registers[i] >= 0 && initial_used_registers[i] < instructions.size()) {
+        if (initial_used_registers[i] >= 0 && initial_used_registers[i] < static_cast<int64_t>(instructions.size())) {
             used_registers[initial_used_registers[i]] = true;
         }
     }
@@ -713,7 +718,7 @@ void rv_generator_st::optimize() {
         auto used_registers_cpy = used_registers;
         avx_buffer<int64_t> newly_used { instructions.size() * 2 };
         for (size_t i = 0; i < instructions.size(); ++i) {
-            if (can_remove(i, used_registers_cpy)) {
+            if (can_remove(static_cast<uint32_t>(i), used_registers_cpy)) {
                 newly_used[2 * i] = rs1[i] - 64;
                 newly_used[2 * i + 1] = rs2[i] - 64;
             } else {
@@ -724,7 +729,7 @@ void rv_generator_st::optimize() {
 
         auto new_used_registers = used_registers;
         for (size_t i = 0; i < newly_used.size(); ++i) {
-            if (newly_used[i] >= 0 && newly_used[i] < used_registers.size()) {
+            if (newly_used[i] >= 0 && newly_used[i] < static_cast<int64_t>(used_registers.size())) {
                 new_used_registers[newly_used[i]] = false;
             }
         }
@@ -740,11 +745,11 @@ void rv_generator_st::optimize() {
             }
         }
 
-        std::cout << "sideeffects: " << side_effect_correct << '\n';
+        //std::cout << "sideeffects: " << side_effect_correct << '\n';
 
         auto result = new_used_registers;
         for (size_t i = 0; i < side_effect_correct.size(); ++i) {
-            if (side_effect_correct[i] >= 0 && side_effect_correct[i] < result.size()) {
+            if (side_effect_correct[i] >= 0 && side_effect_correct[i] < static_cast<int64_t>(result.size())) {
                 result[side_effect_correct[i]] = true;
             }
         }
@@ -761,9 +766,302 @@ void rv_generator_st::optimize() {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
     }
 
-    std::cout << used_instrs.size() << ": " << used_instrs << '\n';
+    //std::cout << used_instrs.size() << ": " << used_instrs << '\n';
 }
 
 void rv_generator_st::regalloc() {
+    uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
+    uint32_t max_func_size = std::ranges::max(function_sizes);
+    stack_sizes = avx_buffer<uint32_t>::zero(func_count);
+    auto lifetime_masks = avx_buffer<uint64_t>::fill(func_count, 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00011111);
+    auto preserve_masks = avx_buffer<uint64_t>::zero(func_count);
+
+    struct symbol_data {
+        uint8_t reg;
+        bool swapped;
+    };
+    auto symbol_registers = std::vector<symbol_data>(used_instrs.size());//) < symbol_data > ::fill(used_instrs.size(), {});
+    std::vector<avx_buffer<int64_t>> register_state(func_count, avx_buffer<int64_t>::fill(64, -1));
+
+    auto current_func_offset = [](int64_t i, uint32_t size, uint32_t start) -> uint32_t {
+        if (i >= size) {
+            return 0xFFFFFFFF;
+        } else {
+            return static_cast<uint32_t>(i) + start;
+        }
+    };
+
+    struct register_info {
+        int64_t reg;
+        symbol_data sym;
+    };
+
+    struct lifetime_result {
+        uint64_t mask;
+        std::array<register_info, 3> reg_info;
+        std::array<int64_t, 64> swapped;
+        std::array<int64_t, 64> registers;
+    };
+
+    auto get_symbol_data = [](std::span<symbol_data> symbol_registers, int64_t reg) {
+        if (reg < 64) {
+            return symbol_data { .reg = static_cast<uint8_t>(reg), .swapped = false };
+        } else {
+            return symbol_registers[reg - 64];
+        }
+    };
+
+
+    auto lifetime_analyze_valid = [this, get_symbol_data](std::span<symbol_data> symbol_registers, uint32_t instr_offset, uint64_t lifetime_mask,
+        std::span<int64_t> register_state, uint32_t func_start, uint32_t func_size) -> lifetime_result {
+
+        auto is_call = [](uint32_t instr, uint32_t start, uint32_t size, uint32_t jt) {
+            uint32_t end = start + size;
+            return instr == 0b0000000'00000'00000'000'00001'1101111 && (jt < start || jt >= end);
+        };
+        uint32_t instr = instructions[instr_offset];
+        if (is_call(instr, func_start, func_size, jt[instr_offset])) {
+            std::array<register_info, 3> reg_info { register_info { -1, {} }, register_info { -1, {} }, register_info { -1, {} } };
+            auto new_lifetime_mask = lifetime_mask & preserved_register_mask;
+            auto spilled_register_mask = lifetime_mask & ~preserved_register_mask;
+
+            lifetime_result res { .mask = new_lifetime_mask, .reg_info = reg_info };
+            for (size_t i = 0; i < 64; ++i) {
+                if ((spilled_register_mask & (1ull << i)) != 0) {
+                    res.swapped[i] = i;
+                } else {
+                    res.swapped[i] = -1;
+                }
+
+                if ((new_lifetime_mask & (1ull << i)) != 0) {
+                    res.registers[i] = register_state[i];
+                } else {
+                    res.registers[i] = -1;
+                }
+            }
+
+            return res;
+        } else {
+            auto needs_float_reg = [](uint32_t instr, uint32_t offset) {
+                if (instr == 0b1100000'00000'00000'111'00000'1010011) {
+                    /* FCVT.W.S */
+                    return offset != 0;
+                } else if (instr == 0b1101000'00000'00000'111'00000'1010011) {
+                    /* FCVT.S.W */
+                    return offset == 0;
+                } else {
+                    /* Any float instruction */
+                    return (instr & 0b1111111) == 0b1010011;
+                }
+            };
+
+            auto old_rs1_data = get_symbol_data(symbol_registers, rs1[instr_offset]);
+            auto old_rs2_data = get_symbol_data(symbol_registers, rs2[instr_offset]);
+            uint8_t rs1_reg = old_rs1_data.reg;
+            uint8_t rs2_reg = old_rs2_data.reg;
+            if (old_rs1_data.swapped) {
+                if (needs_float_reg(instructions[instr_offset], 1)) {
+                    rs1_reg = 37;
+                } else {
+                    rs1_reg = 5;
+                }
+            }
+
+            if (old_rs2_data.swapped) {
+                if (needs_float_reg(instructions[instr_offset], 2)) {
+                    rs2_reg = 38;
+                } else {
+                    rs2_reg = 6;
+                }
+            }
+
+            auto clear_reg = [](int32_t reg, uint64_t mask) {
+                if (reg == 0) {
+                    return mask;
+                } else {
+                    return mask & ~(1ull << reg);
+                }
+            };
+
+            auto cleared_lifetime_mask = clear_reg(rs2_reg, clear_reg(rs1_reg, lifetime_mask));
+
+            auto find_free_reg = [](bool float_reg, uint64_t mask) -> uint32_t {
+                auto fixed_regs = mask | (0xFFFFFFFFull << (float_reg ? 0 : 32));
+                unsigned long r = 0;
+                bool nonzero = _BitScanForward64(&r, ~fixed_regs);
+                if (!nonzero) {
+                    return 64;
+                }
+
+                return r;
+            };
+
+            int64_t rd_register = rd[instr_offset];
+            if (rd_register >= 64) {
+                auto float_reg = needs_float_reg(instructions[instr_offset], 0);
+                auto rd_tmp = find_free_reg(float_reg, cleared_lifetime_mask);
+                if (rd_tmp == 64) {
+                    if (float_reg) {
+                        rd_register = 37;
+                    } else {
+                        rd_register = 5;
+                    }
+                } else {
+                    rd_register = rd_tmp;
+                }
+            }
+            int64_t swap_rd = -1;
+            if (rd_register != 0 && ((cleared_lifetime_mask & (1ull << rd_register)) != 0)) {
+                swap_rd = rd_register;
+            }
+            int64_t swap_rs1 = -1;
+            if (rs1_reg != 0 && ((lifetime_mask & (1ull << rs1_reg)) != 0)) {
+                swap_rs1 = rs1_reg;
+            }
+            int64_t swap_rs2 = -1;
+            if (rs2_reg != 0 && ((lifetime_mask & (1ull << rs2_reg)) != 0)) {
+                swap_rs2 = rs2_reg;
+            }
+
+            auto new_lifetime_mask = cleared_lifetime_mask | (1ull << rd_register);
+            lifetime_result res { .mask = new_lifetime_mask };
+            res.reg_info[0].reg = !( rd[instr_offset] < 64) ? ( rd[instr_offset] - 64) : -1;
+            res.reg_info[0].sym = { .reg = static_cast<uint8_t>(rd_register), .swapped = false };
+            res.reg_info[1].reg = !(rs1[instr_offset] < 64) ? (rs2[instr_offset] - 64) : -1;
+            res.reg_info[1].sym = { .reg = rs1_reg, .swapped = false };
+            res.reg_info[2].reg = !(rs1[instr_offset] < 64) ? (rs2[instr_offset] - 64) : -1;
+            res.reg_info[2].sym = { .reg = rs2_reg, .swapped = false };
+
+            std::ranges::copy(register_state, res.registers.begin());
+            res.registers[rd_register] = rd[instr_offset];
+            if (rs1_reg != rd_register) {
+                res.registers[rs1_reg] = -1;
+            }
+            if (rs2_reg != rd_register) {
+                res.registers[rs2_reg] = -1;
+            }
+            std::ranges::fill(res.swapped, -1);
+            res.swapped[0] = swap_rd;
+            res.swapped[1] = swap_rs1;
+            res.swapped[2] = swap_rs2;
+            return res;
+        };
+    };
+
+    auto lifetime_analyze = [this, lifetime_analyze_valid](std::span<symbol_data> symbol_registers, std::span<bool> enabled,
+                                   uint32_t instr_offset, uint64_t lifetime_mask, std::span<int64_t> register_state, uint32_t func_start, uint32_t func_size) -> lifetime_result {
+        std::array<register_info, 3> reg_info { register_info { -1, {} }, register_info { -1, {} }, register_info { -1, {} } };
+        if (instr_offset == 0xFFFFFFFF || !enabled[instr_offset]) {
+            lifetime_result res { .mask = lifetime_mask, .reg_info = reg_info };
+            for (size_t i = 0; i < 64; ++i) {
+                res.swapped[i] = -1;
+                res.registers[i] = register_state[i];
+            }
+
+            return res;
+        } else {
+            return lifetime_analyze_valid(symbol_registers, instr_offset, lifetime_mask, register_state, func_start, func_size);
+        }
+    };
+
+    for (int64_t i = 0; i < max_func_size; ++i) {
+        auto old_offsets = avx_buffer<uint32_t>::zero(func_count);
+        for (size_t j = 0; j < func_count; ++j) {
+            old_offsets[j] = current_func_offset(j, function_sizes[j], func_starts[j]);
+        }
+
+        auto reg_state_copy = register_state;
+        std::vector<std::array<register_info, 3>> updated_symbols(func_count);
+        std::vector<std::array<int64_t, 64>> swapped_registers(func_count);
+        for (size_t j = 0; j < func_count; ++j) {
+            auto res = lifetime_analyze(symbol_registers, used_instrs, old_offsets[j], lifetime_masks[j], register_state[j], func_starts[j], function_sizes[j]);
+
+            lifetime_masks[j] = res.mask;
+            updated_symbols[j] = res.reg_info;
+            swapped_registers[j] = res.swapped;
+            register_state[j] = res.registers;
+        }
+        std::vector<int64_t> swap_data_regs(func_count * 64);
+        std::vector<symbol_data> swap_data_sym(func_count * 64);
+        for (size_t k = 0; k < func_count; ++k) {
+            for (size_t j = 0; j < 64; ++j) {
+                auto reg = swapped_registers[k][j];
+                if (reg < 0) {
+                    swap_data_regs[(k * func_count) + j] = -1;
+                } else {
+                    swap_data_regs[(k * func_count) + j] = reg_state_copy[k][reg] - 64;
+                    swap_data_sym[(k * func_count) + j] = get_symbol_data(symbol_registers, reg_state_copy[k][reg]);
+                    swap_data_sym[(k * func_count) + j].swapped = true;
+                }
+            }
+        }
+        std::vector<register_info> symb_data(func_count * 3);
+        for (size_t j = 0; j < func_count; ++j) {
+            for (size_t k = 0; k < 3; ++k) {
+                symb_data[(j * func_count) + k] = updated_symbols[j][k];
+            }
+        }
+        std::vector<int64_t> symbol_offsets(swap_data_regs.size() + symb_data.size());
+        std::vector<symbol_data> all_symbol_data(swap_data_sym.size() + symb_data.size());
+        for (size_t j = 0; j < swap_data_regs.size(); ++j) {
+            symbol_offsets[j] = swap_data_regs[j];
+            all_symbol_data[j] = swap_data_sym[j];
+        }
+        for (size_t j = 0; j < symb_data.size(); ++j) {
+            symbol_offsets[swap_data_regs.size() + j] = symb_data[j].reg;
+            all_symbol_data[swap_data_regs.size() + j] = symb_data[j].sym;
+        }
+
+        for (size_t j = 0; j < preserve_masks.size(); ++j) {
+            preserve_masks[j] |= lifetime_masks[j];
+        }
+
+        /* scatter symbol_registers symbol_offsets all_symbol_data */
+        for (size_t j = 0; j < symbol_offsets.size(); ++j) {
+            if (symbol_offsets[j] >= 0 && symbol_offsets[j] < static_cast<int64_t>(symbol_registers.size())) {
+                symbol_registers[symbol_offsets[j]] = all_symbol_data[j];
+            }
+        }
+    }
+
+    for (size_t i = 0; i < preserve_masks.size(); ++i) {
+        preserve_masks[i] &= nonscratch_registers;
+    }
+
+    /* Actually bool */
+    auto func_start_bools = avx_buffer<int16_t>::zero(instructions.size());
+    for (auto start : func_starts) {
+        func_start_bools[start] = 1;
+    }
+
+    auto reverse_func_id_map = avx_buffer<int64_t>::zero(instructions.size());
+    std::inclusive_scan(func_start_bools.begin(), func_start_bools.end(), reverse_func_id_map.begin());
+    
+    auto spill_offsets = avx_buffer<int64_t>::zero(symbol_registers.size());
+    for (size_t i = 0; i < symbol_registers.size(); ++i) {
+        spill_offsets[i] = symbol_registers[i].swapped;
+    }
+    for (size_t i = 0; i < symbol_registers.size(); ++i) {
+        if (!func_start_bools[i]) {
+            spill_offsets[i] = i > 0 ? spill_offsets[i - 1] : 0;
+        }
+    }
+
+    auto count_instr = [this, get_symbol_data](uint32_t instr, std::span<symbol_data> symb_data, std::span<bool> enabled) -> int32_t {
+        if (enabled[instr]) {
+            /* The instruction itself */
+            int32_t res = 1;
+
+            /* Possible register swaps for all 3 registers */
+            res += (get_symbol_data(symb_data, rd[instr]).swapped ? 1 : 0);
+            res += (get_symbol_data(symb_data, rs1[instr]).swapped ? 1 : 0);
+            res += (get_symbol_data(symb_data, rs2[instr]).swapped ? 1 : 0);
+            return res;
+        } else {
+            return 0;
+        }
+    };
+
+    // auto instr_offsets = 
 
 }

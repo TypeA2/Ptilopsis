@@ -43,9 +43,11 @@ class rv_generator {
     /* Location indices for each node */
     avx_buffer<uint32_t> node_locations;
 
-    /* Start and end indices of all functions */
+    /* Start, end and size indices of all functions */
     avx_buffer<uint32_t> func_starts;
     avx_buffer<uint32_t> func_ends;
+    avx_buffer<uint32_t> function_sizes;
+    avx_buffer<uint32_t> stack_sizes;
 
     /* Which instructions are actually enabled */
     avx_buffer<bool> used_instrs;

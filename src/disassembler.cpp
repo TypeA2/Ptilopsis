@@ -201,7 +201,7 @@ std::ostream& operator<<(std::ostream& os, rv_register reg) {
             }
     }
 
-    return "unknown";
+    return instr ? "unknown" : "(zero)";
 }
 
 std::ostream& format_args(std::ostream& os, uint32_t instr) {
@@ -304,12 +304,12 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
 std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, uint64_t start_addr) {
     std::ios_base::fmtflags f{ os.flags() };
 
-    os << std::setfill('0')
-       << std::dec << buf.size() << " instructions, starting at 0x" << std::hex << start_addr << std::dec << '\n';
-
     size_t words = buf.size();
 
     size_t digits = static_cast<size_t>(std::ceil(std::log(words) / std::log(16)));
+
+    os << std::setfill('0')
+       << std::dec << buf.size() << " instructions, starting at 0x" << std::hex << std::setw(digits) << start_addr << std::dec << '\n';
 
     for (uint32_t instr : buf) {
         os << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ":   "
