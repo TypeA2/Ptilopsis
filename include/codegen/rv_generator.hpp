@@ -48,6 +48,7 @@ class rv_generator {
     avx_buffer<uint32_t> func_ends;
     avx_buffer<uint32_t> function_sizes;
     avx_buffer<uint32_t> stack_sizes;
+    avx_buffer<uint32_t> function_ids;
 
     /* Which instructions are actually enabled */
     avx_buffer<bool> used_instrs;
@@ -86,5 +87,6 @@ class rv_generator_st : public rv_generator {
     void isn_gen();
     void optimize();
     void regalloc();
+    void fix_func_tab(std::span<int64_t> instr_offsets);
 };
 

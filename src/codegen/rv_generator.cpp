@@ -53,6 +53,12 @@ rv_generator::rv_generator(const DepthTree& tree)
     std::fill_n(node_sizes.begin(), nodes, 0);
 }
 
+[[nodiscard]] static constexpr uint32_t extend(uint32_t x) {
+    int32_t signed_x = x;
+    /* sign extend by arithmetic right-shift */
+    return static_cast<uint32_t>((signed_x << 20) >> 20);
+}
+
 std::ostream& rv_generator::print(std::ostream& os) const {
     std::ios_base::fmtflags f { os.flags() };
     os << std::setfill(' ');
@@ -267,7 +273,7 @@ void rv_generator_st::isn_cnt() {
         })
     };
 
-    avx_buffer<uint32_t> function_ids { func_decls.size() };
+    function_ids = avx_buffer<uint32_t>::zero(func_decls.size());
     std::ranges::transform(func_decls, function_ids.begin(), [this](uint32_t i) {
         return node_data[i];
     });
@@ -538,13 +544,9 @@ void rv_generator_st::isn_gen() {
                         }
                     };
 
-                    auto extend = [](uint32_t x) {
-                        int32_t signed_x = x;
-                        /* sign extend by arithmetic right-shift */
-                        return static_cast<uint32_t>((signed_x << 20) >> 20);
-                    };
+                    
 
-                    auto instr_constant = [extend](rv_node_type type, uint32_t node_data, int64_t relative_offset) -> uint32_t {
+                    auto instr_constant = [](rv_node_type type, uint32_t node_data, int64_t relative_offset) -> uint32_t {
                         auto calc_type = instr_constant_table[as_index(type)][relative_offset];
 
                         // TODO these are logical, explain
@@ -811,8 +813,20 @@ void rv_generator_st::regalloc() {
         }
     };
 
+    auto needs_float_reg = [](uint32_t instr, uint32_t offset) {
+        if (instr == 0b1100000'00000'00000'111'00000'1010011) {
+            /* FCVT.W.S */
+            return offset != 0;
+        } else if (instr == 0b1101000'00000'00000'111'00000'1010011) {
+            /* FCVT.S.W */
+            return offset == 0;
+        } else {
+            /* Any float instruction */
+            return (instr & 0b1111111) == 0b1010011;
+        }
+    };
 
-    auto lifetime_analyze_valid = [this, get_symbol_data](std::span<symbol_data> symbol_registers, uint32_t instr_offset, uint64_t lifetime_mask,
+    auto lifetime_analyze_valid = [this, get_symbol_data, needs_float_reg](std::span<symbol_data> symbol_registers, uint32_t instr_offset, uint64_t lifetime_mask,
         std::span<int64_t> register_state, uint32_t func_start, uint32_t func_size) -> lifetime_result {
 
         auto is_call = [](uint32_t instr, uint32_t start, uint32_t size, uint32_t jt) {
@@ -842,19 +856,6 @@ void rv_generator_st::regalloc() {
 
             return res;
         } else {
-            auto needs_float_reg = [](uint32_t instr, uint32_t offset) {
-                if (instr == 0b1100000'00000'00000'111'00000'1010011) {
-                    /* FCVT.W.S */
-                    return offset != 0;
-                } else if (instr == 0b1101000'00000'00000'111'00000'1010011) {
-                    /* FCVT.S.W */
-                    return offset == 0;
-                } else {
-                    /* Any float instruction */
-                    return (instr & 0b1111111) == 0b1010011;
-                }
-            };
-
             auto old_rs1_data = get_symbol_data(symbol_registers, rs1[instr_offset]);
             auto old_rs2_data = get_symbol_data(symbol_registers, rs2[instr_offset]);
             uint8_t rs1_reg = old_rs1_data.reg;
@@ -1062,6 +1063,271 @@ void rv_generator_st::regalloc() {
         }
     };
 
-    // auto instr_offsets = 
+    auto count_instr_add_preserve = [this, func_count](std::span<uint64_t> preserve_masks, std::span<int64_t> counts) {
+        auto offsets = avx_buffer<int64_t>::zero(func_count);
+        auto data = avx_buffer<int64_t>::zero(func_count);
+        for (size_t i = 0; i < func_count; ++i) {
+            auto preserved = std::popcount(preserve_masks[i]);
+            auto start = func_starts[i] + 5;
+            auto end = func_starts[i] + function_sizes[i] - 6;
 
+            counts[start] += preserved;
+            counts[end] += preserved;
+        }
+    };
+
+    auto instr_counts = avx_buffer<int64_t>::zero(instructions.size());
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        instr_counts[i] = count_instr(static_cast<uint32_t>(i), symbol_registers, used_instrs);
+    }
+    count_instr_add_preserve(preserve_masks, instr_counts);
+    auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
+    std::exclusive_scan(instr_counts.begin(), instr_counts.end(), instr_offsets.begin(), 0i64);
+
+    int64_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
+
+    auto new_instr = avx_buffer<uint32_t>::zero(new_instr_count);
+    auto new_rd = avx_buffer<int64_t>::zero(new_instr_count);
+    auto new_rs1 = avx_buffer<int64_t>::zero(new_instr_count);
+    auto new_rs2 = avx_buffer<int64_t>::zero(new_instr_count);
+    auto new_jt = avx_buffer<uint32_t>::zero(new_instr_count);
+
+    auto new_indices = avx_buffer<int64_t>::zero(instructions.size() * 4);
+    auto temp_instr = avx_buffer<uint32_t>::zero(instructions.size() * 4);
+    auto temp_rd = avx_buffer<int64_t>::zero(instructions.size() * 4);
+    auto temp_rs1 = avx_buffer<int64_t>::zero(instructions.size() * 4);
+    auto temp_rs2 = avx_buffer<int64_t>::zero(instructions.size() * 4);
+    auto temp_jt = avx_buffer<uint32_t>::zero(instructions.size() * 4);
+
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        if (used_instrs[i]) {
+            auto base_offset = instr_offsets[i];
+            int64_t rs1_load_offset = -1;
+            uint32_t rs1_stack_offset = 0;
+            if (rs1[i] >= 64 && symbol_registers[rs1[i] - 64].swapped) {
+                rs1_load_offset = base_offset;
+                rs1_stack_offset = static_cast<uint32_t>(spill_offsets[rs1[i] - 64]);
+            }
+
+            int64_t rs2_load_offset = -1;
+            uint32_t rs2_stack_offset = 0;
+            if (rs2[i] >= 64 && symbol_registers[rs2[i] - 64].swapped) {
+                rs2_load_offset = base_offset + ((rs1_load_offset > 0) ? 1 : 0);
+                rs2_stack_offset = static_cast<uint32_t>(spill_offsets[rs2[i] - 64]);
+            }
+
+            int64_t main_instr_offset = base_offset + ((rs1_load_offset > 0) ? 1 : 0) + ((rs2_load_offset > 0) ? 1 : 0);
+            int64_t rd_offset = -1;
+            uint32_t rd_stack_offset = 0;
+            if (rd[i] >= 64 && symbol_registers[rd[i] - 64].swapped) {
+                rd_offset = main_instr_offset + 1;
+                rd_stack_offset = static_cast<uint32_t>(spill_offsets[rd[i] - 64]);
+            }
+
+            auto func_id = reverse_func_id_map[i] - 1;
+
+            int64_t allocated_rd = rd[i];
+            if (rd[i] >= 64) {
+                allocated_rd = symbol_registers[rd[i] - 64].reg;
+            }
+
+            int64_t allocated_rs1 = rs1[i];
+            if (rs1[i] >= 64) {
+                if (symbol_registers[rs1[i] - 64].swapped) {
+                    if (needs_float_reg(instructions[i], 1)) {
+                        allocated_rs1 = 37;
+                    } else {
+                        allocated_rs1 = 5;
+                    }
+                } else {
+                    allocated_rs1 = symbol_registers[rs1[i] - 64].reg;
+                }
+            }
+
+            int64_t allocated_rs2 = rs2[i];
+            if (rs2[i] >= 64) {
+                if (symbol_registers[rs2[i] - 64].swapped) {
+                    if (needs_float_reg(instructions[i], 2)) {
+                        allocated_rs2 = 38;
+                    } else {
+                        allocated_rs2 = 6;
+                    }
+                } else {
+                    allocated_rs2 = symbol_registers[rs2[i] - 64].reg;
+                }
+            }
+
+            auto make_load = [](int64_t dest_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t rs2, uint32_t& jt) {
+                /* Construct immediate */
+                uint32_t imm = (4 * (stack_offset - 1)) << 20; 
+                
+                /* lw */
+                instr = 0b0000000'00000'00000'010'00000'0000011 | imm;
+                rd = dest_reg;
+                rs1 = 0;
+                rs2 = 0;
+                jt = 0;
+            };
+
+            auto make_store = [](int64_t src_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t rs2, uint32_t& jt) {
+                uint32_t imm = (-4 * (stack_offset - 1));
+                uint32_t lower = (imm & 0x1f) << 7;
+                uint32_t upper = (imm & 0xfe) << 19;
+
+                /* sw */
+                instr = 0b0000000'00000'00000'010'00000'0100011 | lower | upper;
+                rd = 0;
+                rs1 = src_reg;
+                rs2 = 0;
+                jt = 0;
+            };
+
+            /* load into temp regs */
+            new_indices[(4 * i) + 0] = rs1_load_offset;
+            // TODO shouldn't this be func_id - 1?
+            make_load(5, rs1_stack_offset + stack_sizes[func_id], temp_instr[4 * i], temp_rd[4 * i], temp_rs1[4 * i], temp_rs2[4 * i], temp_jt[4 * i]);
+
+            new_indices[(4 * i) + 1] = rs2_load_offset;
+            make_load(6, rs2_stack_offset + stack_sizes[func_id],
+                temp_instr[(4 * i) + 1], temp_rd[(4 * i) + 1], temp_rs1[(4 * i) + 1], temp_rs2[(4 * i) + 1], temp_jt[(4 * i) + 1]);
+
+            new_indices[(4 * i) + 2] = main_instr_offset;
+            temp_instr[(4 * i) + 2] = instructions[i];
+            temp_rd[(4 * i) + 2] = allocated_rd;
+            temp_rs1[(4 * i) + 2] = allocated_rs1;
+            temp_rs2[(4 * i) + 2] = allocated_rs2;
+            temp_jt[(4 * i) + 2] = static_cast<uint32_t>(instr_offsets[jt[i]]);
+
+            new_indices[(4 * i) + 3] = rd_offset;
+            make_store(allocated_rd, rd_stack_offset + stack_sizes[func_id],
+                temp_instr[(4 * i) + 3], temp_rd[(4 * i) + 3], temp_rs1[(4 * i) + 3], temp_rs2[(4 * i) + 3], temp_jt[(4 * i) + 3]);
+        } else {
+            new_indices[(4 * i) + 0] = -1;
+            new_indices[(4 * i) + 1] = -1;
+            new_indices[(4 * i) + 2] = -1;
+            new_indices[(4 * i) + 3] = -1;
+        }
+    }
+
+    /* scatter */
+    for (size_t i = 0; i < new_indices.size(); ++i) {
+        if (new_indices[i] >= 0 && new_indices[i] < new_instr_count) {
+            new_instr[new_indices[i]] = temp_instr[i];
+            new_rd[new_indices[i]] = temp_rd[i];
+            new_rs1[new_indices[i]] = temp_rs1[i];
+            new_rs2[new_indices[i]] = temp_rs2[i];
+            new_jt[new_indices[i]] = temp_jt[i];
+        }
+    }
+
+    auto overflows = avx_buffer<uint32_t>::zero(func_count);
+
+    instructions = new_instr;
+    rd = new_rd;
+    rs1 = new_rs1;
+    rs2 = new_rs2;
+    jt = new_jt;
+
+    fix_func_tab(instr_offsets);
+
+    auto scatter_indices = avx_buffer<int64_t>::zero(func_count * 4ui64);
+    auto scatter_opcodes = avx_buffer<uint32_t>::zero(func_count * 4ui64);
+    for (size_t i = 0; i < func_count; ++i) {
+        uint32_t preserve_count = std::popcount(preserve_masks[i]);
+        uint32_t stack_size = (stack_sizes[i] + overflows[i] + preserve_count + 2) * 4;
+        uint32_t lower = (stack_size & 0xFFF) << 20;
+        uint32_t upper = stack_size - (extend(stack_size & 0xFFF)) & 0xFFFFF000;
+
+        scatter_indices[(i * 4) + 0] = func_starts[i] + 2;
+        scatter_opcodes[(i * 4) + 0] = 0b0000000'00000'00000'000'01000'0110111 | upper; /* lui x8, upper */
+        scatter_indices[(i * 4) + 1] = func_starts[i] + 3;
+        scatter_opcodes[(i * 4) + 1] = 0b0000000'00000'01000'000'01000'0010011 | lower; /* addi x8, x8, lower */
+        scatter_indices[(i * 4) + 2] = func_starts[i] + function_sizes[i] - 6;
+        scatter_opcodes[(i * 4) + 2] = 0b0000000'00000'00000'000'01000'0110111 | upper; /* lui x8, upper */
+        scatter_indices[(i * 4) + 3] = func_starts[i] + function_sizes[i] - 5;
+        scatter_opcodes[(i * 4) + 3] = 0b0000000'00000'01000'000'01000'0010011 | lower; /* addi x8, x8, lower */
+    }
+
+    auto preserve_indices = avx_buffer<int64_t>::zero(func_count * 64ui64);
+    auto preserve_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ui64);
+    for (size_t i = 0; i < func_count; ++i) {
+        auto preserve_stack_offset = (stack_sizes[i] + overflows[i] + 2) * 4;
+        auto p_mask = preserve_masks[i];
+
+        for (uint32_t j = 0; j < 64; ++j) {
+            int64_t leading = std::popcount(p_mask & (1ui64 << j) - 1);
+            int64_t offset = -(preserve_stack_offset + leading * 4);
+            uint32_t offset_high = (offset & 0xFE0ui32) << 25;
+            uint32_t offset_low = (offset & 0x1Fui32) < 7;
+            uint32_t src = (j % 32) << 20;
+            uint32_t store_const = offset_high | offset_low | src;
+            /* fsw or sw */
+            uint32_t opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0100111 : 0b0000000'00000'01000'010'00000'0100011;
+            if (p_mask & (1ui64 << j)) {
+                preserve_indices[(i * 64) + j] = func_starts[i] + leading + 6;
+                preserve_opcodes[(i * 64) + j] = opcode | store_const;
+            } else {
+                preserve_indices[(i * 64) + j] = -1;
+            }
+        }
+    }
+
+    auto load_indices = avx_buffer<int64_t>::zero(func_count * 64ui64);
+    auto load_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ui64);
+    for (size_t i = 0; i < func_count; ++i) {
+        auto preserve_stack_offset = (stack_sizes[i] + overflows[i] + 2) * 4;
+        auto p_mask = preserve_masks[i];
+        
+        for (uint32_t j = 0; j < 64; ++j) {
+            int64_t leading = std::popcount(p_mask & ((1ui64 << j)) - 1);
+            int64_t offset = -(preserve_stack_offset + leading * 4);
+
+            uint32_t load_offset = static_cast<uint32_t>(offset) << 20;
+            uint32_t load_dst = (j % 32) << 7;
+            uint32_t load_const = load_offset | load_dst;
+
+            uint32_t opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0000111 : 0b0000000'00000'01000'010'00000'0000011;
+
+            if (p_mask & (1ui64 << j)) {
+                load_indices[(i * 64) + j] = func_starts[i] + function_sizes[i] + leading - 7;
+                load_opcodes[(i * 64) + j] = opcode | load_const;
+            } else {
+                load_indices[(i * 64) + j] = -1;
+            }
+        }
+    }
+
+    auto all_indices = avx_buffer<int64_t>::zero(func_count * 132);
+    auto all_opcodes = avx_buffer<uint32_t>::zero(func_count * 132);
+    for (size_t i = 0; i < (func_count * 4); ++i) {
+        all_indices[i] = scatter_indices[i];
+        all_opcodes[i] = scatter_opcodes[i];
+    }
+
+    for (size_t i = 0; i < (func_count * 64); ++i) {
+        all_indices[(func_count * 4) + i] = preserve_indices[i];
+        all_indices[(func_count * 68) + i] = load_indices[i];
+
+        all_opcodes[(func_count * 4) + i] = preserve_opcodes[i];
+        all_opcodes[(func_count * 68) + i] = load_opcodes[i];
+    }
+
+    for (size_t i = 0; i < all_indices.size(); ++i) {
+        if (all_indices[i] >= 0 && all_indices[i] < static_cast<int64_t>(instructions.size())) {
+            instructions[all_indices[i]] = all_opcodes[i];
+        }
+    }
+}
+
+void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
+    for (size_t i = 0; i < func_starts.size(); ++i) {
+        uint32_t func_start = static_cast<uint32_t>(instr_offsets[func_starts[i]]);
+        uint64_t func_end_loc = func_starts[i] + function_sizes[i];
+        uint32_t func_end = static_cast<uint32_t>((func_end_loc >= instr_offsets.size()) ? (instr_offsets.back() + 1) : instr_offsets[func_end_loc]);
+        auto func_size = func_end - func_start;
+
+        func_starts[i] = func_start;
+        func_ends[i] = func_end;
+        function_sizes[i] = func_size;
+    }
 }
