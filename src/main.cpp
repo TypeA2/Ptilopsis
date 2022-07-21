@@ -38,25 +38,27 @@ int main(int argc, char** argv) {
         node->resolveType();
 
         /* We now have a pointer-linked AST. Show some properties. */
-        TreeProperties props(node.get());
-        std::cout << "Number of nodes: " << props.getNodeCount() << std::endl;
-        std::cout << "Tree width: " << props.getWidth() << std::endl;
-        std::cout << "Tree height: " << props.getDepth() << std::endl;
-        std::cout << "Num functions: " << props.getFunctions() << std::endl;
-        std::cout << "Max function length: " << props.getMaxFuncLen() << std::endl;
+        if (false) {
+            TreeProperties props(node.get());
+            std::cout << "Number of nodes: " << props.getNodeCount() << std::endl;
+            std::cout << "Tree width: " << props.getWidth() << std::endl;
+            std::cout << "Tree height: " << props.getDepth() << std::endl;
+            std::cout << "Num functions: " << props.getFunctions() << std::endl;
+            std::cout << "Max function length: " << props.getMaxFuncLen() << std::endl;
+        }
 
         /* Convert to an inverted tree */
         DepthTree depth_tree(node.get());
         
         rv_generator_st gen{ depth_tree };
 
-        node->print(std::cout);
+        // node->print(std::cout);
 
         auto begin = std::chrono::steady_clock::now();
         gen.process();
         auto end = std::chrono::steady_clock::now();
 
-        gen.print(std::cout);
+        // gen.print(std::cout);
 
         std::cout << "Processing done in " << (end - begin) << '\n';
     }

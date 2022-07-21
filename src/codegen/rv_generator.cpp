@@ -108,7 +108,7 @@ void rv_generator_st::process() {
 }
 
 void rv_generator_st::dump_instrs() {
-    std::cout << rvdisasm::color::extra << "\n == " << instructions.size() << " instructions ==\n" << rvdisasm::color::white;
+    std::cout << rvdisasm::color::extra << " == " << instructions.size() << " instructions ==\n" << rvdisasm::color::white;
     size_t digits = static_cast<size_t>(std::log10(instructions.size()) + 1);
     for (size_t i = 0; i < instructions.size(); ++i) {
         std::string instr = rvdisasm::instruction(instructions[i], true);
@@ -781,14 +781,17 @@ void rv_generator_st::regalloc() {
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
     stack_sizes = avx_buffer<uint32_t>::zero(func_count);
+    /* Which register is currently used. Mark zero, ra, sp, gp, tp as used. */
     auto lifetime_masks = avx_buffer<uint64_t>::fill(func_count, 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00011111);
     auto preserve_masks = avx_buffer<uint64_t>::zero(func_count);
 
+    /* Map virtual reg to physical reg. If swapped, store the value on the stack after write */
     struct symbol_data {
         uint8_t reg;
         bool swapped;
     };
     auto symbol_registers = std::vector<symbol_data>(used_instrs.size());//) < symbol_data > ::fill(used_instrs.size(), {});
+    /* Which virtual register currently occupies which physical register */
     std::vector<avx_buffer<int64_t>> register_state(func_count, avx_buffer<int64_t>::fill(64, -1));
 
     auto current_func_offset = [](int64_t i, uint32_t size, uint32_t start) -> uint32_t {
@@ -804,17 +807,24 @@ void rv_generator_st::regalloc() {
         symbol_data sym;
     };
 
+    /* Lifetime analysis state at a specific instruction */
     struct lifetime_result {
+        /* Usage mask at this point */
         uint64_t mask;
+        /* rd, rs1 and rs2 */
         std::array<register_info, 3> reg_info;
+        /* What registers were swapped */
         std::array<int64_t, 64> swapped;
+        /* Virtual to physical register mapping */
         std::array<int64_t, 64> registers;
     };
 
     auto get_symbol_data = [](std::span<symbol_data> symbol_registers, int64_t reg) {
         if (reg < 64) {
+            /* A predetermined register that can't be reassigned*/
             return symbol_data { .reg = static_cast<uint8_t>(reg), .swapped = false };
         } else {
+            /* Data for the virtual register reg */
             return symbol_registers[reg - 64];
         }
     };
@@ -862,8 +872,15 @@ void rv_generator_st::regalloc() {
 
             return res;
         } else {
+
+            /* Get the current state of rs1 and rs2 */
             auto old_rs1_data = get_symbol_data(symbol_registers, rs1[instr_offset]);
             auto old_rs2_data = get_symbol_data(symbol_registers, rs2[instr_offset]);
+
+            /* If swapped = true, then the value was moved to the stack after it was previously written to,
+             * so we need to load it in a temporary register, t0 and t1 for integers and f5 and f6 for floats.
+             * If it wasn't swapped, just use the physical register it's in
+             */
             uint8_t rs1_reg = old_rs1_data.reg;
             uint8_t rs2_reg = old_rs2_data.reg;
             if (old_rs1_data.swapped) {
@@ -890,12 +907,17 @@ void rv_generator_st::regalloc() {
                 }
             };
 
+            /* Mark the actual rs1 and rs2 as clear */
             auto cleared_lifetime_mask = clear_reg(rs2_reg, clear_reg(rs1_reg, lifetime_mask));
 
             auto find_free_reg = [](bool float_reg, uint64_t mask) -> uint32_t {
+                /* If float, mark all int registers as occupied and vice versa */
                 auto fixed_regs = mask | (0xFFFFFFFFull << (float_reg ? 0 : 32));
+
+                /* The first 1 in the NOT'ed mask means the first zero in the original */
                 unsigned long r = 0;
                 bool nonzero = _BitScanForward64(&r, ~fixed_regs);
+                /* ~fixed_regs == 0 means all registers are taken*/
                 if (!nonzero) {
                     return 64;
                 }
@@ -903,17 +925,21 @@ void rv_generator_st::regalloc() {
                 return r;
             };
 
+            /* The virtual destination register */
             int64_t rd_register = rd[instr_offset];
             if (rd_register >= 64) {
+                /* Not predetermined, so it needs to be allocated */
                 auto float_reg = needs_float_reg(instructions[instr_offset], 0);
                 auto rd_tmp = find_free_reg(float_reg, cleared_lifetime_mask);
                 if (rd_tmp == 64) {
+                    /* No registers available, so we'll use t0 and f5 again*/
                     if (float_reg) {
                         rd_register = 37;
                     } else {
                         rd_register = 5;
                     }
                 } else {
+                    /* New register found */
                     rd_register = rd_tmp;
                 }
             }
@@ -958,8 +984,12 @@ void rv_generator_st::regalloc() {
     auto lifetime_analyze = [this, lifetime_analyze_valid](std::span<symbol_data> symbol_registers, std::span<bool> enabled,
                                    uint32_t instr_offset, uint64_t lifetime_mask, std::span<int64_t> register_state, uint32_t func_start, uint32_t func_size) -> lifetime_result {
         std::array<register_info, 3> reg_info { register_info { -1, {} }, register_info { -1, {} }, register_info { -1, {} } };
+
         if (instr_offset == 0xFFFFFFFF || !enabled[instr_offset]) {
+            /* If there's no valid instruction (past the end or optimized away) at the current position... */
             lifetime_result res { .mask = lifetime_mask, .reg_info = reg_info };
+
+            /* No registers are swapped and all mappings stay the same */
             for (size_t i = 0; i < 64; ++i) {
                 res.swapped[i] = -1;
                 res.registers[i] = register_state[i];
@@ -967,11 +997,14 @@ void rv_generator_st::regalloc() {
 
             return res;
         } else {
+            /* Perform the actual analysis */
             return lifetime_analyze_valid(symbol_registers, instr_offset, lifetime_mask, register_state, func_start, func_size);
         }
     };
 
+    /* Process 1 instruction per function */
     for (int64_t i = 0; i < max_func_size; ++i) {
+        /* For every functionl calculate the instruction offset relative to the start we're currently manipulating, or 0xFFFFFFFF if we're past the end */
         auto old_offsets = avx_buffer<uint32_t>::zero(func_count);
         for (size_t j = 0; j < func_count; ++j) {
             old_offsets[j] = current_func_offset(j, function_sizes[j], func_starts[j]);
@@ -1228,11 +1261,15 @@ void rv_generator_st::regalloc() {
 
     auto overflows = avx_buffer<uint32_t>::zero(func_count);
 
+    // dump_instrs();
+
     instructions = new_instr;
     rd = new_rd;
     rs1 = new_rs1;
     rs2 = new_rs2;
     jt = new_jt;
+
+    // dump_instrs();
 
     fix_func_tab(instr_offsets);
 
@@ -1324,7 +1361,6 @@ void rv_generator_st::regalloc() {
         }
     }
 
-    dump_instrs();
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
