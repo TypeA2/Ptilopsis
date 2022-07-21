@@ -8,6 +8,7 @@
 #include <magic_enum.hpp>
 
 using namespace magic_enum::ostream_operators;
+namespace color = rvdisasm::color;
 
 enum class instruction_type {
     unknown, r, i, s, b, u, j, r4,
@@ -20,14 +21,7 @@ enum class rv_register : int16_t {
     x24, x25, x26, x27, x28, x29, x30, x31
 };
 
-namespace color {
-    constexpr std::string_view white = "\033[37m";
-    constexpr std::string_view instr = "\033[38;5;186m";
-    constexpr std::string_view reg = "\033[38;5;117m";
-    constexpr std::string_view imm = "\033[38;5;114m";
-    constexpr std::string_view extra = "\033[38;5;114m";
-    constexpr std::string_view index = "\033[38;5;94m";
-}
+bool g_color_regs = true;
 
 std::ostream& operator<<(std::ostream& os, rv_register reg) {
     // auto flags = os.flags();
@@ -42,7 +36,7 @@ std::ostream& operator<<(std::ostream& os, rv_register reg) {
         "t3", "t4", "t5", "t6"
 
     };
-    os << color::reg << abi_names[magic_enum::enum_integer(reg)] << color::white;
+    os << (g_color_regs ? color::reg : "") << abi_names[magic_enum::enum_integer(reg)] << (g_color_regs ? color::white : "");
     // os.flags(flags);
     return os;
 }
@@ -224,10 +218,16 @@ std::ostream& operator<<(std::ostream& os, rv_register reg) {
     return instr ? "unknown" : "(zero)";
 }
 
-std::ostream& format_args(std::ostream& os, uint32_t instr) {
+std::ostream& format_args(std::ostream& os, uint32_t instr, bool color) {
     auto flags = os.flags();
+    bool old_color_regs = g_color_regs;
+    g_color_regs = color;
+
     os << std::dec;
     auto type = instr_type(instr);
+
+    std::string_view color_imm = color ? color::imm : "";
+    std::string_view color_white = color ? color::white : "";
     switch (type) {
         case instruction_type::r: {
             auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
@@ -251,11 +251,11 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
                 case 0b0000011:
                 case 0b0000111:
                 case 0b1100111:
-                    os << rd << ", " << color::imm << imm_signed << color::white << "(" << rs1 << ")";
+                    os << rd << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
                     break;
 
                 default:
-                    os << rd << ", " << rs1 << ", " << color::imm << imm_signed << color::white;
+                    os << rd << ", " << rs1 << ", " << color_imm << imm_signed << color_white;
             }
 
             break;
@@ -270,7 +270,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
 
             auto imm_signed = static_cast<int32_t>(imm);
-            os << rs2 << ", " << color::imm << imm_signed << color::white << "(" << rs1 << ")";
+            os << rs2 << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
             break;
         }
         case instruction_type::b: {
@@ -284,14 +284,14 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
             auto imm_signed = static_cast<int32_t>(imm);
 
-            os << rs1 << ", " << rs2 << ", " << color::imm << imm_signed << color::white;
+            os << rs1 << ", " << rs2 << ", " << color_imm << imm_signed << color_white;
             break;
         }
         case instruction_type::u: {
             auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
             int32_t signed_imm = instr & 0xFFFFF000;
 
-            os << rd << ", " << color::imm << signed_imm << color::white;
+            os << rd << ", " << color_imm << signed_imm << color_white;
             break;
         }
         case instruction_type::j: {
@@ -304,7 +304,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
             auto imm_signed = static_cast<int32_t>(imm);
 
-            os << rd << ", " << color::imm << imm_signed << color::white;
+            os << rd << ", " << color_imm << imm_signed << color_white;
             break;
         }
         case instruction_type::r4: {
@@ -318,6 +318,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
         }
     }
 
+    g_color_regs = old_color_regs;
     os.flags(flags);
     return os;
 }
@@ -328,13 +329,15 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
     size_t words = buf.size();
 
     size_t digits = static_cast<size_t>(std::ceil(std::log(words) / std::log(16)));
+    size_t count_digits = static_cast<size_t>(std::log10(words)) + 1;
 
     os << color::extra << std::setfill('0')
        << std::dec << buf.size() << color::white << " instructions, starting at "
        << color::imm << "0x" << std::hex << std::setw(digits) << start_addr << color::white << std::dec <<'\n';
 
     for (uint32_t instr : buf) {
-        os  << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ":   "
+        os  << color::extra << std::dec << std::setw(count_digits) << std::setfill(' ') << std::right << (start_addr / 4) << color::white << "   "
+            << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ": "
             << ' ' << color::extra << std::setw(2) << ((instr >> 24) & 0xFF) << color::white
             << ' ' << color::extra << std::setw(2) << ((instr >> 16) & 0xFF) << color::white
             << ' ' << color::extra << std::setw(2) << ((instr >> 8 ) & 0xFF) << color::white
@@ -342,7 +345,7 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
             << "   " << color::instr << std::setw(9) << std::setfill(' ') << std::left
             << instr_name(instr) << color::white << ' ';
 
-        format_args(os, instr);
+        format_args(os, instr, true);
 
         os << '\n';
 
@@ -360,7 +363,7 @@ std::string rvdisasm::instruction(uint32_t instr, bool pad) {
         res << std::setw(9) << std::setfill(' ') << std::left;
     }
     res << instr_name(instr) << ' ';
-    format_args(res, instr);
+    format_args(res, instr, false);
 
     return res.str();
 }

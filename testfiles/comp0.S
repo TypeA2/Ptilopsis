@@ -5,8 +5,8 @@ comp0:     file format binary
 Disassembly of section .data:
 
 0000000000000000 <.data>:
-   0:	sw	ra,-4(sp)
-   4:	sw	s0,-8(sp)
+   0:	sw	   ra,-4(sp)
+   4:	sw	   s0,-8(sp)
    8:	lui	s0,0x0
    c:	addi	s0,s0,8 # 0x8
   10:	sub	sp,sp,s0

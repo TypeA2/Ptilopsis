@@ -107,6 +107,24 @@ void rv_generator_st::process() {
     postprocess();
 }
 
+void rv_generator_st::dump_instrs() {
+    std::cout << rvdisasm::color::extra << "\n == " << instructions.size() << " instructions ==\n" << rvdisasm::color::white;
+    size_t digits = static_cast<size_t>(std::log10(instructions.size()) + 1);
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        std::string instr = rvdisasm::instruction(instructions[i], true);
+        std::cout << rvdisasm::color::extra << std::dec << std::setw(digits) << std::setfill(' ') << i << rvdisasm::color::white << ": " << instr;
+        int64_t pad = std::max(0i64, 32 - static_cast<int64_t>(instr.size()));
+        for (int64_t j = 0; j < pad; ++j) {
+            std::cout << ' ';
+        }
+
+        std::cout << std::setw(2) << std::setfill(' ') << rd[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs1[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs2[i] << ' '
+            << std::setw(2) << std::setfill(' ') << jt[i] << '\n';
+    }
+}
+
 void rv_generator_st::preprocess() {
     using enum rv_node_type;
 
@@ -665,20 +683,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
-    return;
-    for (size_t i = 0; i < instructions.size(); ++i) {
-        auto instr = rvdisasm::instruction(instructions[i], true);
-        std::cout << instr;
-        auto pad = 32 - instr.size();
-        for (size_t j = 0; j < pad; ++j) {
-            std::cout << ' ';
-        }
-
-        std::cout << std::setw(2) << std::setfill(' ') << rd[i] << ' '
-            << std::setw(2) << std::setfill(' ') << rs1[i] << ' '
-            << std::setw(2) << std::setfill(' ') << rs2[i] << ' '
-            << std::setw(2) << std::setfill(' ') << jt[i] << '\n';
-    }
+    // dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -769,8 +774,7 @@ void rv_generator_st::optimize() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
     }
-
-    //std::cout << used_instrs.size() << ": " << used_instrs << '\n';
+   // dump_instrs();
 }
 
 void rv_generator_st::regalloc() {
@@ -1319,6 +1323,8 @@ void rv_generator_st::regalloc() {
             instructions[all_indices[i]] = all_opcodes[i];
         }
     }
+
+    dump_instrs();
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
