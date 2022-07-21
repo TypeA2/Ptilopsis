@@ -88,5 +88,6 @@ class rv_generator_st : public rv_generator {
     void optimize();
     void regalloc();
     void fix_func_tab(std::span<int64_t> instr_offsets);
+    void fix_jumps();
+    void postprocess();
 };
-

@@ -103,6 +103,8 @@ void rv_generator_st::process() {
     isn_gen();
     optimize();
     regalloc();
+    fix_jumps();
+    postprocess();
 }
 
 void rv_generator_st::preprocess() {
@@ -1329,5 +1331,96 @@ void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
         func_starts[i] = func_start;
         func_ends[i] = func_end;
         function_sizes[i] = func_size;
+    }
+}
+
+void rv_generator_st::fix_jumps() {
+    auto is_jump = [](uint32_t instr) {
+        /* jalr */
+        return (instr & 0b1111111) == 0b1100111;
+    };
+
+    auto is_branch = [](uint32_t instr) {
+        /* beq/bne/blt/bge/bltu/bgeu */
+        return (instr & 0b1111111) == 0b1100011;
+    };
+
+    auto instr_sizes = avx_buffer<int64_t>::zero(instructions.size());
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        if (is_jump(instructions[i])) {
+            instr_sizes[i] = 2;
+        } else {
+            instr_sizes[i] = 1;
+        }
+    }
+    auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
+    std::exclusive_scan(instr_sizes.begin(), instr_sizes.end(), instr_offsets.begin(), 0i64);
+    int64_t instr_count = instr_sizes.back() + instr_offsets.back();
+
+    auto new_instr = avx_buffer<uint32_t>::zero(instr_count);
+    auto new_rd = avx_buffer<int64_t>::zero(instr_count);
+    auto new_rs1 = avx_buffer<int64_t>::zero(instr_count);
+    auto new_rs2 = avx_buffer<int64_t>::zero(instr_count);
+    auto new_jt = avx_buffer<uint32_t>::zero(instr_count);
+
+    for (size_t i = 0; i < instr_offsets.size(); ++i) {
+        new_instr[instr_offsets[i]] = instructions[i];
+        new_rd[instr_offsets[i]] = rd[i];
+        new_rs1[instr_offsets[i]] = rs1[i];
+        new_rs2[instr_offsets[i]] = rs2[i];
+        new_jt[instr_offsets[i]] = jt[i];
+    }
+
+    for (int64_t i = 0; i < instr_count; ++i) {
+        new_jt[i] = static_cast<uint32_t>(instr_offsets[new_jt[i]]);
+    }
+
+    auto offsets = avx_buffer<int64_t>::zero(instructions.size() * 2);
+    auto opcodes = avx_buffer<uint32_t>::zero(instructions.size() * 2);
+
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        int64_t new_index = instr_offsets[i];
+        if (is_jump(new_instr[new_index])) {
+            uint32_t target = new_jt[new_index] * 4;
+            uint32_t upper = (target & 0xFFFFF000) >> 12;
+            uint32_t lower = target & 0xFFF;
+            uint32_t sign = (target >> 11) & 1;
+            uint32_t upper_constant = upper + sign;
+
+            /* auipc x1 */
+            offsets[(2 * i) + 0] = new_index;
+            opcodes[(2 * i) + 0] = 0b00001'0010111 | (upper_constant << 12);
+
+            offsets[(2 * i) + 1] = new_index + 1;
+            opcodes[(2 * i) + 1] = new_instr[new_index] | (lower << 20) | (0b00001ui32 << 15);
+        } else {
+            offsets[(2 * i) + 0] = -1;
+            offsets[(2 * i) + 1] = -1;
+        }
+    }
+
+    for (size_t i = 0; i < offsets.size(); ++i) {
+        if (offsets[i] >= 0 && offsets[i] < instr_count) {
+            new_instr[offsets[i]] = opcodes[i];
+            new_jt[offsets[i]] = 0;
+        }
+    }
+
+    instructions = new_instr;
+    rd = new_rd;
+    rs1 = new_rs1;
+    rs2 = new_rs2;
+    jt = new_jt;
+
+    fix_func_tab(instr_offsets);
+}
+
+void rv_generator_st::postprocess() {
+    for (size_t i = 0; i < instructions.size(); ++i) {
+        uint32_t rd  = static_cast<uint32_t>(this->rd[i])  & 0b11111;
+        uint32_t rs1 = static_cast<uint32_t>(this->rs1[i]) & 0b11111;
+        uint32_t rs2 = static_cast<uint32_t>(this->rs2[i]) & 0b11111;
+
+        instructions[i] |= (rd << 7) | (rs1 << 15) | (rs2 << 20);
     }
 }
