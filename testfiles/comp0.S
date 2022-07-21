@@ -28,12 +28,12 @@ Disassembly of section .data:
   50:	lui	s0,0x0
   54:	addi	s0,s0,8 # 0x8
   58:	add	sp,sp,s0
-  5c:	lw	ra,-4(sp)
-  60:	lw	s0,-8(s0)
+  5c:	lw	   ra,-4(sp)
+  60:	lw	   s0,-8(s0)
   64:	auipc	ra,0x0
   68:	jalr	zero,0(ra) # 0x64
-  6c:	sw	ra,-4(sp)
-  70:	sw	s0,-8(sp)
+  6c:	sw	   ra,-4(sp)
+  70:	sw	   s0,-8(sp)
   74:	lui	s0,0x0
   78:	addi	s0,s0,8 # 0x8
   7c:	sub	sp,sp,s0
@@ -50,7 +50,7 @@ Disassembly of section .data:
   a4:	lui	s0,0x0
   a8:	addi	s0,s0,8 # 0x8
   ac:	add	sp,sp,s0
-  b0:	lw	ra,-4(sp)
-  b4:	lw	s0,-8(s0)
+  b0:	lw	   ra,-4(sp)
+  b4:	lw	   s0,-8(s0)
   b8:	auipc	ra,0x0
   bc:	jalr	zero,0(ra) # 0xb8

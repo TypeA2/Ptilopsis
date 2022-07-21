@@ -14,16 +14,36 @@ enum class instruction_type {
 };
 
 enum class rv_register : int16_t {
-    x0, x1, x2, x3, x4, x5, x6, x7,
-    x8, x9, x10, x11, x12, x13, x14, x15,
+    x0,   x1,  x2,  x3,  x4,  x5,  x6,  x7,
+    x8,   x9, x10, x11, x12, x13, x14, x15,
     x16, x17, x18, x19, x20, x21, x22, x23,
     x24, x25, x26, x27, x28, x29, x30, x31
 };
 
+namespace color {
+    constexpr std::string_view white = "\033[37m";
+    constexpr std::string_view instr = "\033[38;5;186m";
+    constexpr std::string_view reg = "\033[38;5;117m";
+    constexpr std::string_view imm = "\033[38;5;114m";
+    constexpr std::string_view extra = "\033[38;5;114m";
+    constexpr std::string_view index = "\033[38;5;94m";
+}
+
 std::ostream& operator<<(std::ostream& os, rv_register reg) {
-    auto flags = os.flags();
-    os << "x" << std::dec << static_cast<std::underlying_type_t<rv_register>>(reg);
-    os.flags(flags);
+    // auto flags = os.flags();
+    // os << "x" << std::dec << static_cast<std::underlying_type_t<rv_register>>(reg);
+    static constexpr std::array<std::string_view, magic_enum::enum_count<rv_register>()> abi_names {
+        "zero",
+        "ra", "sp", "gp", "tp",
+        "t0", "t1", "t2",
+        "s0", "s1",
+        "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7",
+        "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
+        "t3", "t4", "t5", "t6"
+
+    };
+    os << color::reg << abi_names[magic_enum::enum_integer(reg)] << color::white;
+    // os.flags(flags);
     return os;
 }
 
@@ -230,11 +250,12 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             switch (instr & 0b1111111) {
                 case 0b0000011:
                 case 0b0000111:
-                    os << rd << ", " << imm_signed << "(" << rs1 << ")";
+                case 0b1100111:
+                    os << rd << ", " << color::imm << imm_signed << color::white << "(" << rs1 << ")";
                     break;
 
                 default:
-                    os << rd << ", " << rs1 << ", " << imm_signed;
+                    os << rd << ", " << rs1 << ", " << color::imm << imm_signed << color::white;
             }
 
             break;
@@ -249,7 +270,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
 
             auto imm_signed = static_cast<int32_t>(imm);
-            os << rs2 << ", " << imm_signed << "(" << rs1 << ")";
+            os << rs2 << ", " << color::imm << imm_signed << color::white << "(" << rs1 << ")";
             break;
         }
         case instruction_type::b: {
@@ -263,14 +284,14 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
             auto imm_signed = static_cast<int32_t>(imm);
 
-            os << rs1 << ", " << rs2 << ", " << imm_signed;
+            os << rs1 << ", " << rs2 << ", " << color::imm << imm_signed << color::white;
             break;
         }
         case instruction_type::u: {
             auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
             int32_t signed_imm = instr & 0xFFFFF000;
 
-            os << rd << ", " << signed_imm;
+            os << rd << ", " << color::imm << signed_imm << color::white;
             break;
         }
         case instruction_type::j: {
@@ -283,7 +304,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr) {
             }
             auto imm_signed = static_cast<int32_t>(imm);
 
-            os << rd << ", " << imm_signed;
+            os << rd << ", " << color::imm << imm_signed << color::white;
             break;
         }
         case instruction_type::r4: {
@@ -308,17 +329,18 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
 
     size_t digits = static_cast<size_t>(std::ceil(std::log(words) / std::log(16)));
 
-    os << std::setfill('0')
-       << std::dec << buf.size() << " instructions, starting at 0x" << std::hex << std::setw(digits) << start_addr << std::dec << '\n';
+    os << color::extra << std::setfill('0')
+       << std::dec << buf.size() << color::white << " instructions, starting at "
+       << color::imm << "0x" << std::hex << std::setw(digits) << start_addr << color::white << std::dec <<'\n';
 
     for (uint32_t instr : buf) {
-        os << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ":   "
-            << ' ' << std::setw(2) << ((instr >> 24) & 0xFF)
-            << ' ' << std::setw(2) << ((instr >> 16) & 0xFF)
-            << ' ' << std::setw(2) << ((instr >> 8) & 0xFF)
-            << ' ' << std::setw(2) << (instr & 0xFF)
-            << "   "  << std::setw(9) << std::setfill(' ') << std::left
-            << instr_name(instr) << ' ';
+        os  << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ":   "
+            << ' ' << color::extra << std::setw(2) << ((instr >> 24) & 0xFF) << color::white
+            << ' ' << color::extra << std::setw(2) << ((instr >> 16) & 0xFF) << color::white
+            << ' ' << color::extra << std::setw(2) << ((instr >> 8 ) & 0xFF) << color::white
+            << ' ' << color::extra << std::setw(2) << (instr & 0xFF)         << color::white
+            << "   " << color::instr << std::setw(9) << std::setfill(' ') << std::left
+            << instr_name(instr) << color::white << ' ';
 
         format_args(os, instr);
 
