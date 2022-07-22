@@ -1332,8 +1332,8 @@ void rv_generator_st::regalloc() {
             /* Translate the jt to the new offset */
             temp_jt[(4 * i) + 2] = static_cast<uint32_t>(instr_offsets[jt[i]]);
 
-            std::cout << i << ": " << rd[i] << ", " << rs1[i] << ", " << rs2[i] << '\n';
-            std::cout << "    " << allocated_rd << ", " << allocated_rs1 << ", " << allocated_rs2 << '\n';
+            //std::cout << i << ": " << rd[i] << ", " << rs1[i] << ", " << rs2[i] << '\n';
+            //std::cout << "    " << allocated_rd << ", " << allocated_rs1 << ", " << allocated_rs2 << '\n';
 
             /* Store from the result */
             new_indices[(4 * i) + 3] = rd_offset;
@@ -1360,7 +1360,7 @@ void rv_generator_st::regalloc() {
 
     auto overflows = avx_buffer<uint32_t>::zero(func_count);
 
-    dump_instrs();
+    //dump_instrs();
 
     instructions = new_instr;
     rd = new_rd;
@@ -1368,7 +1368,7 @@ void rv_generator_st::regalloc() {
     rs2 = new_rs2;
     jt = new_jt;
 
-    dump_instrs();
+    //dump_instrs();
 
     fix_func_tab(instr_offsets);
 
@@ -1531,7 +1531,9 @@ void rv_generator_st::fix_jumps() {
             /* auipc x1 */
             offsets[(2 * i) + 0] = new_index;
             opcodes[(2 * i) + 0] = 0b00001'0010111 | (upper_constant << 12);
+            //std::cout << new_index << ": " << rvdisasm::instruction(opcodes[2 * i]) << "  ->  " << rd[new_index] << '\n';
 
+            /* The actual jump */
             offsets[(2 * i) + 1] = new_index + 1;
             opcodes[(2 * i) + 1] = new_instr[new_index] | (lower << 20) | (0b00001ui32 << 15);
         } else {
@@ -1544,6 +1546,9 @@ void rv_generator_st::fix_jumps() {
         if (offsets[i] >= 0 && offsets[i] < instr_count) {
             new_instr[offsets[i]] = opcodes[i];
             new_jt[offsets[i]] = 0;
+            new_rd[offsets[i]] = 0;
+            new_rs1[offsets[i]] = 0;
+            new_rs2[offsets[i]] = 0;
         }
     }
 
