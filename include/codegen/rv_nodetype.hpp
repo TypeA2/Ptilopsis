@@ -7,9 +7,6 @@
 
 #include <codegen/astnode.hpp>
 
-using namespace magic_enum::bitwise_operators;
-using namespace magic_enum::ostream_operators;
-
 /* Separate node type definitions because
  * at this point they're not typechecked anymore
  */

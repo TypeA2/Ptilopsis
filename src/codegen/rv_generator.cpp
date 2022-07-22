@@ -25,6 +25,9 @@
 
 #pragma warning(disable: 26451)
 
+using namespace magic_enum::bitwise_operators;
+using namespace magic_enum::ostream_operators;
+
 rv_generator::rv_generator(const DepthTree& tree)
     : nodes          { tree.filledNodes() }
     , max_depth      { tree.maxDepth()    }
@@ -74,18 +77,20 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     size_t data_digits = max_digits(node_data);
     size_t location_digits = max_digits(node_locations);
 
-    for (size_t i = 0; i < nodes; ++i) {
-        fmt::print(os, "Node {:>{}}", i, node_digits);
-        fmt::print(os, ", type = {:>3}", as_index(node_types[i]));
-        fmt::print(os, ", result = {:>9}", result_types[i]);
-        fmt::print(os, ", parent = {:>{}}", parents[i], node_digits);
-        fmt::print(os, ", depth = {:>{}}", depth[i], depth_digits);
-        fmt::print(os, ", child_idx = {:>{}}", child_idx[i], node_digits + 1);
-        fmt::print(os, ", size = {:>{}}", node_sizes[i], size_digits);
-        fmt::print(os, ", data = {:>{}}", node_data[i], data_digits);
-        fmt::print(os, ", loc = {:>{}}", node_locations[i], location_digits);
+    if (false) {
+        for (size_t i = 0; i < nodes; ++i) {
+            fmt::print(os, "Node {:>{}}", i, node_digits);
+            fmt::print(os, ", type = {:>3}", as_index(node_types[i]));
+            fmt::print(os, ", result = {:>9}", result_types[i]);
+            fmt::print(os, ", parent = {:>{}}", parents[i], node_digits);
+            fmt::print(os, ", depth = {:>{}}", depth[i], depth_digits);
+            fmt::print(os, ", child_idx = {:>{}}", child_idx[i], node_digits + 1);
+            fmt::print(os, ", size = {:>{}}", node_sizes[i], size_digits);
+            fmt::print(os, ", data = {:>{}}", node_data[i], data_digits);
+            fmt::print(os, ", loc = {:>{}}", node_locations[i], location_digits);
 
-        os << '\n';
+            os << '\n';
+        }
     }
 
     if (instructions) {
@@ -791,7 +796,7 @@ void rv_generator_st::regalloc() {
         bool swapped;
     };
     auto symbol_registers = std::vector<symbol_data>(used_instrs.size());//) < symbol_data > ::fill(used_instrs.size(), {});
-    /* Which virtual register currently occupies which physical register */
+    /* Map virtual to physical registers */
     std::vector<avx_buffer<int64_t>> register_state(func_count, avx_buffer<int64_t>::fill(64, -1));
 
     auto current_func_offset = [](int64_t i, uint32_t size, uint32_t start) -> uint32_t {
@@ -809,13 +814,13 @@ void rv_generator_st::regalloc() {
 
     /* Lifetime analysis state at a specific instruction */
     struct lifetime_result {
-        /* Usage mask at this point */
+        /* Usage mask after this instruction */
         uint64_t mask;
-        /* rd, rs1 and rs2 */
+        /* rd, rs1 and rs2 for this instruction */
         std::array<register_info, 3> reg_info;
         /* What registers were swapped */
         std::array<int64_t, 64> swapped;
-        /* Virtual to physical register mapping */
+        /* Maps physical registers to the virtual registers currently occupying them */
         std::array<int64_t, 64> registers;
     };
 
@@ -851,19 +856,31 @@ void rv_generator_st::regalloc() {
         };
         uint32_t instr = instructions[instr_offset];
         if (is_call(instr, func_start, func_size, jt[instr_offset])) {
+            /* Call instructions are a special case */
             std::array<register_info, 3> reg_info { register_info { -1, {} }, register_info { -1, {} }, register_info { -1, {} } };
+
+            /* The following registers may be used:
+             *  zero, ra, sp, gp, tp, s0-s11, fs0-fs11
+             * All other registers should be marked as free before the call.
+             */
             auto new_lifetime_mask = lifetime_mask & preserved_register_mask;
+
+            /* Any of these callee-saved registers that are in used must be saved */
             auto spilled_register_mask = lifetime_mask & ~preserved_register_mask;
 
             lifetime_result res { .mask = new_lifetime_mask, .reg_info = reg_info };
             for (size_t i = 0; i < 64; ++i) {
                 if ((spilled_register_mask & (1ull << i)) != 0) {
+                    /* Callee-saved register that is in-use will be swapped out before this call,
+                     * and marked as swapped out afterwards.
+                     */
                     res.swapped[i] = i;
                 } else {
                     res.swapped[i] = -1;
                 }
 
                 if ((new_lifetime_mask & (1ull << i)) != 0) {
+                    /* Copy the virtual to physical register mapping of the registers that don't need to be saved */
                     res.registers[i] = register_state[i];
                 } else {
                     res.registers[i] = -1;
@@ -930,6 +947,8 @@ void rv_generator_st::regalloc() {
             if (rd_register >= 64) {
                 /* Not predetermined, so it needs to be allocated */
                 auto float_reg = needs_float_reg(instructions[instr_offset], 0);
+
+                /* Use the mask where rs1 and rs2 are marked as clear, since rd can be rs1 or rs2 */
                 auto rd_tmp = find_free_reg(float_reg, cleared_lifetime_mask);
                 if (rd_tmp == 64) {
                     /* No registers available, so we'll use t0 and f5 again*/
@@ -943,6 +962,11 @@ void rv_generator_st::regalloc() {
                     rd_register = rd_tmp;
                 }
             }
+
+            /* For rd, rs1 and rs2, if they were in use before this instruction,
+             * mark them to be swapped out before this instruction, so the next
+             * usage knows they are swapped out
+             */
             int64_t swap_rd = -1;
             if (rd_register != 0 && ((cleared_lifetime_mask & (1ull << rd_register)) != 0)) {
                 swap_rd = rd_register;
@@ -956,23 +980,33 @@ void rv_generator_st::regalloc() {
                 swap_rs2 = rs2_reg;
             }
 
+            /* Set rd to be in use after this instruction */
             auto new_lifetime_mask = cleared_lifetime_mask | (1ull << rd_register);
             lifetime_result res { .mask = new_lifetime_mask };
-            res.reg_info[0].reg = !( rd[instr_offset] < 64) ? ( rd[instr_offset] - 64) : -1;
+
+            /* For rd, rs1 and rs2, store the virtual register they correspond to and the destination physical regsiter
+             * If the register is predetermined, there is no virtual register so store -1
+             */
+            res.reg_info[0].reg = ( rd[instr_offset] >= 64) ? ( rd[instr_offset] - 64) : -1;
             res.reg_info[0].sym = { .reg = static_cast<uint8_t>(rd_register), .swapped = false };
-            res.reg_info[1].reg = !(rs1[instr_offset] < 64) ? (rs2[instr_offset] - 64) : -1;
+            res.reg_info[1].reg = (rs1[instr_offset] >= 64) ? (rs1[instr_offset] - 64) : -1;
             res.reg_info[1].sym = { .reg = rs1_reg, .swapped = false };
-            res.reg_info[2].reg = !(rs1[instr_offset] < 64) ? (rs2[instr_offset] - 64) : -1;
+            res.reg_info[2].reg = (rs2[instr_offset] >= 64) ? (rs2[instr_offset] - 64) : -1;
             res.reg_info[2].sym = { .reg = rs2_reg, .swapped = false };
 
             std::ranges::copy(register_state, res.registers.begin());
+
+            /* Store what virtual registers are held by the physical registers used by rd, rs1 and rs2 */
             res.registers[rd_register] = rd[instr_offset];
+
+            /* If rs1 and rs2 are not rd, mark them as free after this */
             if (rs1_reg != rd_register) {
                 res.registers[rs1_reg] = -1;
             }
             if (rs2_reg != rd_register) {
                 res.registers[rs2_reg] = -1;
             }
+
             std::ranges::fill(res.swapped, -1);
             res.swapped[0] = swap_rd;
             res.swapped[1] = swap_rs1;
@@ -1004,23 +1038,30 @@ void rv_generator_st::regalloc() {
 
     /* Process 1 instruction per function */
     for (int64_t i = 0; i < max_func_size; ++i) {
-        /* For every functionl calculate the instruction offset relative to the start we're currently manipulating, or 0xFFFFFFFF if we're past the end */
+        /* For every function calculate the instruction offset relative to the start we're currently manipulating, or 0xFFFFFFFF if we're past the end */
         auto old_offsets = avx_buffer<uint32_t>::zero(func_count);
         for (size_t j = 0; j < func_count; ++j) {
-            old_offsets[j] = current_func_offset(j, function_sizes[j], func_starts[j]);
+            old_offsets[j] = current_func_offset(i, function_sizes[j], func_starts[j]);
         }
 
+        std::cout << old_offsets << "\n";
+
+        /* Analyze all instructions we need to analyze */
         auto reg_state_copy = register_state;
         std::vector<std::array<register_info, 3>> updated_symbols(func_count);
         std::vector<std::array<int64_t, 64>> swapped_registers(func_count);
         for (size_t j = 0; j < func_count; ++j) {
             auto res = lifetime_analyze(symbol_registers, used_instrs, old_offsets[j], lifetime_masks[j], register_state[j], func_starts[j], function_sizes[j]);
 
+            //std::cout << func_starts[j] << ", " << old_offsets[j] << ", " << (func_starts[j] + old_offsets[j]) << '\n';
+
             lifetime_masks[j] = res.mask;
             updated_symbols[j] = res.reg_info;
             swapped_registers[j] = res.swapped;
             register_state[j] = res.registers;
         }
+
+
         std::vector<int64_t> swap_data_regs(func_count * 64);
         std::vector<symbol_data> swap_data_sym(func_count * 64);
         for (size_t k = 0; k < func_count; ++k) {
@@ -1261,7 +1302,7 @@ void rv_generator_st::regalloc() {
 
     auto overflows = avx_buffer<uint32_t>::zero(func_count);
 
-    // dump_instrs();
+    dump_instrs();
 
     instructions = new_instr;
     rd = new_rd;
@@ -1269,7 +1310,7 @@ void rv_generator_st::regalloc() {
     rs2 = new_rs2;
     jt = new_jt;
 
-    // dump_instrs();
+    //dump_instrs();
 
     fix_func_tab(instr_offsets);
 

@@ -7,26 +7,14 @@
 
 #include <magic_enum.hpp>
 
-using namespace magic_enum::ostream_operators;
 namespace color = rvdisasm::color;
-
-enum class instruction_type {
-    unknown, r, i, s, b, u, j, r4,
-};
-
-enum class rv_register : int16_t {
-    x0,   x1,  x2,  x3,  x4,  x5,  x6,  x7,
-    x8,   x9, x10, x11, x12, x13, x14, x15,
-    x16, x17, x18, x19, x20, x21, x22, x23,
-    x24, x25, x26, x27, x28, x29, x30, x31
-};
 
 bool g_color_regs = true;
 
-std::ostream& operator<<(std::ostream& os, rv_register reg) {
-    // auto flags = os.flags();
-    // os << "x" << std::dec << static_cast<std::underlying_type_t<rv_register>>(reg);
-    static constexpr std::array<std::string_view, magic_enum::enum_count<rv_register>()> abi_names {
+std::ostream& operator<<(std::ostream& os, rvdisasm::rv_register reg) {
+    extern bool g_color_regs;
+
+    static constexpr std::array<std::string_view, magic_enum::enum_count<rvdisasm::rv_register>()> abi_names {
         "zero",
         "ra", "sp", "gp", "tp",
         "t0", "t1", "t2",
@@ -36,13 +24,18 @@ std::ostream& operator<<(std::ostream& os, rv_register reg) {
         "t3", "t4", "t5", "t6"
 
     };
-    os << (g_color_regs ? color::reg : "") << abi_names[magic_enum::enum_integer(reg)] << (g_color_regs ? color::white : "");
-    // os.flags(flags);
+
+    os << (g_color_regs ? rvdisasm::color::reg : "") << abi_names[magic_enum::enum_integer(reg)] << (g_color_regs ? rvdisasm::color::white : "");
+
     return os;
 }
 
-[[nodiscard]] instruction_type instr_type(uint32_t instr) {
-    using enum instruction_type;
+std::ostream& operator<<(std::ostream& os, std::optional<rvdisasm::rv_register> reg) {
+    return reg.has_value() ? (os << reg.value()) : os;
+}
+
+[[nodiscard]] rvdisasm::instruction_type instr_type(uint32_t instr) {
+    using enum rvdisasm::instruction_type;
     uint8_t opcode = instr & 0b1111111;
     uint8_t funct3 = (instr >> 12) & 0b111;
     switch (opcode) {
@@ -228,6 +221,9 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color) {
 
     std::string_view color_imm = color ? color::imm : "";
     std::string_view color_white = color ? color::white : "";
+
+    using namespace rvdisasm;
+
     switch (type) {
         case instruction_type::r: {
             auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);

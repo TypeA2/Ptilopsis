@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
         gen.process();
         auto end = std::chrono::steady_clock::now();
 
-        // gen.print(std::cout);
+        gen.print(std::cout);
 
         std::cout << "Processing done in " << (end - begin) << '\n';
     }
