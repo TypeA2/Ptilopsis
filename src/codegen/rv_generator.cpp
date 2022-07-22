@@ -519,8 +519,9 @@ void rv_generator_st::isn_gen() {
                     uint32_t instr_in_buf = instr_idx + i;
                     auto node_type = node_types[idx];
                     auto data_type = result_types[idx];
-                    auto get_output_register = [this, idx, i, instr_in_buf](rv_node_type node_type, DataType resulting_type) -> int64_t {
+                    auto get_output_register = [this, idx, i, instr_in_buf, get_parent_arg_idx](rv_node_type node_type, DataType resulting_type) -> int64_t {
                         // TODO enum
+
                         /* the type of calculation required to get the output register */
                         auto calc_type = get_output_table[as_index(node_type)][i][as_index(resulting_type)];
                         switch (calc_type) {
@@ -531,12 +532,14 @@ void rv_generator_st::isn_gen() {
                             case 2: return node_data[idx] + 42; /* float call argument */
                             case 3: return 32; /* return values: float */
                             case 4: return 10; /* return values: invalid, void, int, int_ref, float_ref */
-                            default:
-                                /* if there's a return value at all */
-                                if (as_index(resulting_type) > 1) {
+                            default: {
+                                bool has_output_val = (get_parent_arg_idx(static_cast<uint32_t>(idx), i) != -1)
+                                    && has_output[as_index(node_type)][i][as_index(resulting_type)];
+                                if (has_output_val) {
                                     return instr_in_buf + 64;
                                 }
                                 return 0;
+                            }
                         }
                     };
 
@@ -568,8 +571,6 @@ void rv_generator_st::isn_gen() {
                             return instr_in_buf;
                         }
                     };
-
-                    
 
                     auto instr_constant = [](rv_node_type type, uint32_t node_data, int64_t relative_offset) -> uint32_t {
                         auto calc_type = instr_constant_table[as_index(type)][relative_offset];
@@ -692,6 +693,7 @@ void rv_generator_st::isn_gen() {
 }
 
 void rv_generator_st::optimize() {
+    //dump_instrs();
     auto initial_used_registers_length = 2 * instructions.size();
     avx_buffer<int64_t> initial_used_registers { initial_used_registers_length };
     for (size_t i = 0; i < instructions.size(); ++i) {
@@ -779,7 +781,7 @@ void rv_generator_st::optimize() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
     }
-   // dump_instrs();
+    //dump_instrs();
 }
 
 void rv_generator_st::regalloc() {
@@ -1368,9 +1370,9 @@ void rv_generator_st::regalloc() {
     rs2 = new_rs2;
     jt = new_jt;
 
-    //dump_instrs();
-
     fix_func_tab(instr_offsets);
+
+    //dump_instrs();
 
     auto scatter_indices = avx_buffer<int64_t>::zero(func_count * 4ui64);
     auto scatter_opcodes = avx_buffer<uint32_t>::zero(func_count * 4ui64);
@@ -1428,6 +1430,7 @@ void rv_generator_st::regalloc() {
             uint32_t load_dst = (j % 32) << 7;
             uint32_t load_const = load_offset | load_dst;
 
+            /* flw or lw */
             uint32_t opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0000111 : 0b0000000'00000'01000'010'00000'0000011;
 
             if (p_mask & (1ui64 << j)) {
@@ -1453,16 +1456,20 @@ void rv_generator_st::regalloc() {
         all_opcodes[(func_count * 4) + i] = preserve_opcodes[i];
         all_opcodes[(func_count * 68) + i] = load_opcodes[i];
     }
-
     for (size_t i = 0; i < all_indices.size(); ++i) {
         if (all_indices[i] >= 0 && all_indices[i] < static_cast<int64_t>(instructions.size())) {
             instructions[all_indices[i]] = all_opcodes[i];
+            rd[all_indices[i]] = 0;
+            rs1[all_indices[i]] = 0;
+            rs2[all_indices[i]] = 0;
+            jt[all_indices[i]] = 0;
         }
     }
 
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
+    /* Re-calculate function table based on new offsets */
     for (size_t i = 0; i < func_starts.size(); ++i) {
         uint32_t func_start = static_cast<uint32_t>(instr_offsets[func_starts[i]]);
         uint64_t func_end_loc = func_starts[i] + function_sizes[i];

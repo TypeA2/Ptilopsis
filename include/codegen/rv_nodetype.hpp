@@ -319,6 +319,77 @@ constexpr auto generate_has_instr() {
 
 constexpr auto has_instr_mapping = generate_has_instr();
 
+constexpr auto generate_has_output() {
+    using enum rv_node_type;
+
+    mapping_helper<std::array<ArrayForTypes<bool>, 4>, max_node_types> res;
+
+    ArrayForTypes<bool> yes { true,  true,  true,  true,  true,  true };
+    ArrayForTypes<bool> no { false, false, false, false, false, false };
+
+    res[invalid]        = { no, no, no, no };
+    res[statement_list] = { no, no, no, no };
+    res[empty]          = { no, no, no, no };
+    res[expression]     = { no, no, no, no };
+
+    res[add_expr]       = { no, no, no, no };
+    res[sub_expr]       = { no, no, no, no };
+    res[mul_expr]       = { no, no, no, no };
+    res[div_expr]       = { no, no, no, no };
+    res[mod_expr]       = { no, no, no, no };
+    res[bitand_expr]    = { no, no, no, no };
+    res[bitor_expr]     = { no, no, no, no };
+    res[bitxor_expr]    = { no, no, no, no };
+    res[lshift_expr]    = { no, no, no, no };
+    res[rshift_expr]    = { no, no, no, no };
+    res[urshift_expr]   = { no, no, no, no };
+    res[logic_and_expr] = { no, no, no, no };
+    res[logic_or_expr]  = { no, no, no, no };
+
+    res[bitnot_expr]    = { no, no, no, no };
+    res[logic_not_expr] = { no, no, no, no };
+    res[neg_expr]       = { no, no, no, no };
+
+    res[literal_expr]     = { yes, {false, false, false, true, false, false}, no, no};
+    res[cast_expr]        = { no,  no, no, no };
+    res[deref_expr]       = { no,  no, no, no };
+    res[assign_expr]      = { no,  no, no, no };
+    res[decl_expr]        = { no,  no, no, no };
+    res[id_expr]          = { no,  no, no, no };
+    res[while_dummy]      = { no,  no, no, no };
+    res[func_decl_dummy]  = { no,  no, no, no };
+    res[return_statement] = { yes, no, no, no };
+
+    res[func_decl]     = { no, no, no, no };
+    res[func_arg_list] = { no, no,  no,  no };
+
+    res[func_call_expression] = { no, no, no, no };
+    res[func_call_arg_list]   = { no, no, no, no };
+
+    res[if_statement]      = { no, no, no, no };
+    res[while_statement]   = { no, no, no, no };
+    res[if_else_statement] = { no, no, no, no };
+
+    res[eq_expr]  = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no};
+    res[neq_expr] = { yes, no, no, no };
+    res[lt_expr]  = { no,  no, no, no };
+    res[gt_expr]  = { no,  no, no, no };
+    res[lte_expr] = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no };
+    res[gte_expr] = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no };
+
+    res[func_arg]                   = { no,  no, no, no };
+    res[func_arg_float_as_int]      = { no,  no, no, no };
+    res[func_arg_on_stack]          = { yes, no, no, no };
+    res[func_call_arg]              = { no,  no, no, no };
+    res[func_call_arg_float_as_int] = { no,  no, no, no };
+    res[func_call_arg_on_stack]     = { no,  no, no, no };
+
+    return res.get();
+}
+
+constexpr auto has_output = generate_has_output();
+
+
 /* NODE_GET_PARENT_ARG_IDX_LOOKUP */
 
 constexpr auto generate_parent_arg_idx_lookup() {
@@ -624,7 +695,7 @@ constexpr auto generate_instr_table() {
         /* lw ra, -4(sp) */
         all_types(0b1111111'11100'00010'010'00001'0000011),
 
-        /* lw x8, -8(x8) */
+        /* lw s0, -8(s0) */
         all_types(0b1111111'11000'01000'010'01000'0000011),
 
         /* jalr x0, x1, 0 */
