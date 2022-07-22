@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
         
         rv_generator_st gen{ depth_tree };
 
-        // node->print(std::cout);
+        node->print(std::cout);
 
         auto begin = std::chrono::steady_clock::now();
         gen.process();

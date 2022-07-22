@@ -21,9 +21,13 @@
 #include <cmath>
 
 #include <immintrin.h>
-#include <intrin.h>
 
-#pragma warning(disable: 26451)
+#ifdef _MSC_VER
+#   include <intrin.h>
+#   pragma warning(disable: 26451)
+#endif
+
+
 
 using namespace magic_enum::bitwise_operators;
 using namespace magic_enum::ostream_operators;
@@ -77,21 +81,21 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     size_t data_digits = max_digits(node_data);
     size_t location_digits = max_digits(node_locations);
 
-    if (false) {
-        for (size_t i = 0; i < nodes; ++i) {
-            fmt::print(os, "Node {:>{}}", i, node_digits);
-            fmt::print(os, ", type = {:>3}", as_index(node_types[i]));
-            fmt::print(os, ", result = {:>9}", result_types[i]);
-            fmt::print(os, ", parent = {:>{}}", parents[i], node_digits);
-            fmt::print(os, ", depth = {:>{}}", depth[i], depth_digits);
-            fmt::print(os, ", child_idx = {:>{}}", child_idx[i], node_digits + 1);
-            fmt::print(os, ", size = {:>{}}", node_sizes[i], size_digits);
-            fmt::print(os, ", data = {:>{}}", node_data[i], data_digits);
-            fmt::print(os, ", loc = {:>{}}", node_locations[i], location_digits);
+#if 1
+    for (size_t i = 0; i < nodes; ++i) {
+        fmt::print(os, "Node {:>{}}", i, node_digits);
+        fmt::print(os, ", type = {:>3}", as_index(node_types[i]));
+        fmt::print(os, ", result = {:>9}", result_types[i]);
+        fmt::print(os, ", parent = {:>{}}", parents[i], node_digits);
+        fmt::print(os, ", depth = {:>{}}", depth[i], depth_digits);
+        fmt::print(os, ", child_idx = {:>{}}", child_idx[i], node_digits + 1);
+        fmt::print(os, ", size = {:>{}}", node_sizes[i], size_digits);
+        fmt::print(os, ", data = {:>{}}", node_data[i], data_digits);
+        fmt::print(os, ", loc = {:>{}}", node_locations[i], location_digits);
 
-            os << '\n';
-        }
+        os << '\n';
     }
+#endif
 
     if (instructions) {
         rvdisasm::disassemble(os, instructions, 0);
@@ -118,7 +122,7 @@ void rv_generator_st::dump_instrs() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         std::string instr = rvdisasm::instruction(instructions[i], true);
         std::cout << rvdisasm::color::extra << std::dec << std::setw(digits) << std::setfill(' ') << i << rvdisasm::color::white << ": " << instr;
-        int64_t pad = std::max(0i64, 32 - static_cast<int64_t>(instr.size()));
+        int64_t pad = std::max<int64_t>(0, 32 - static_cast<int64_t>(instr.size()));
         for (int64_t j = 0; j < pad; ++j) {
             std::cout << ' ';
         }
@@ -193,7 +197,8 @@ void rv_generator_st::preprocess() {
     for (size_t i = 0; i < nodes; ++i) {
         // TODO: convert to a mapping operation (write in a separate memory buffer and then apply)
         /* If the parent of this node is a comparison operator and this node is a float */
-        if ((node_types[parents[i]] & eq_expr) == eq_expr
+        if (parents[i] >= 0
+            && (node_types[parents[i]] & eq_expr) == eq_expr
             && result_types[i] == DataType::FLOAT) {
             result_types[parents[i]] = DataType::FLOAT;
         }
@@ -291,12 +296,13 @@ void rv_generator_st::isn_cnt() {
 
     /* Function table generation */
     auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
-
-    avx_buffer<uint32_t> func_decls {
-        std::views::filter(avx_buffer<uint32_t>::iota(nodes), [this](uint32_t i) {
+    auto src_buf = avx_buffer<uint32_t>::iota(nodes);
+    //std::vector<uint32_t> src = ;
+    avx_buffer<uint32_t> func_decls(
+        std::views::filter(src_buf, [this](uint32_t i) {
             return node_types[i] == func_decl;
         })
-    };
+    );
 
     function_ids = avx_buffer<uint32_t>::zero(func_decls.size());
     std::ranges::transform(func_decls, function_ids.begin(), [this](uint32_t i) {
@@ -481,7 +487,7 @@ void rv_generator_st::isn_gen() {
          */
         for (size_t idx : idx_array.slice(start_index, end_index)) {
             /* Compile each node */
-            uint32_t instr_offset = node_locations[idx];
+            // uint32_t instr_offset = node_locations[idx];
 
             /* Every node generates at most 4 instructions
              * has_instr_mapping[node_type][offset][result_type]
@@ -616,7 +622,7 @@ void rv_generator_st::isn_gen() {
                             case 4: return registers[node * parent_idx_per_node + 1];
                             case 5: return registers[node * parent_idx_per_node + 1 - arg_no];
                             case 6: return registers[node * parent_idx_per_node];
-                            case 7: return relative_offset + 64 - 1;
+                            case 7: return instr_in_buf + 64 - 1;
                             default: return 0;
                         }
                     };
@@ -672,7 +678,7 @@ void rv_generator_st::isn_gen() {
 
         /* scatter data idx instrs */
         for (size_t i = 0; i < (level_size * 4); ++i) {
-            if (instruction_indices[i] >= 0 && instruction_indices[i] < instructions.size()) {
+            if (instruction_indices[i] >= 0 && instruction_indices[i] < static_cast<int64_t>(instructions.size())) {
                 instructions[instruction_indices[i]] = current_instructions[i];
                 rd[instruction_indices[i]] = current_rd[i];
                 rs1[instruction_indices[i]] = current_rs1[i];
@@ -683,13 +689,13 @@ void rv_generator_st::isn_gen() {
 
         /* scatter registers parent_idx new_regs */
         for (size_t i = 0; i < (level_size * 4); ++i) {
-            if (parent_indices[i] >= 0 && parent_indices[i] < registers.size()) {
+            if (parent_indices[i] >= 0 && parent_indices[i] < static_cast<int64_t>(registers.size())) {
                 registers[parent_indices[i]] = new_regs[i];
             }
         }
     }
 
-    // dump_instrs();
+    dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -919,7 +925,7 @@ void rv_generator_st::regalloc() {
                 }
             }
 
-            auto clear_reg = [](int32_t reg, uint64_t mask) {
+            auto clear_reg = [](int32_t reg, uint64_t mask) -> uint64_t {
                 if (reg == 0) {
                     return mask;
                 } else {
@@ -934,6 +940,7 @@ void rv_generator_st::regalloc() {
                 /* If float, mark all int registers as occupied and vice versa */
                 auto fixed_regs = mask | (0xFFFFFFFFull << (float_reg ? 0 : 32));
 
+#ifdef _MSC_VER
                 /* The first 1 in the NOT'ed mask means the first zero in the original */
                 unsigned long r = 0;
                 bool nonzero = _BitScanForward64(&r, ~fixed_regs);
@@ -943,6 +950,15 @@ void rv_generator_st::regalloc() {
                 }
 
                 return r;
+#else
+                int res = __builtin_ffs(~fixed_regs);
+                /* Not found */
+                if (res == 0) {
+                    return 64;
+                }
+
+                return res - 1;
+#endif
             };
 
             /* The virtual destination register */
@@ -1198,7 +1214,7 @@ void rv_generator_st::regalloc() {
 
     /* New instruction offsets that take spills into account */
     auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
-    std::exclusive_scan(instr_counts.begin(), instr_counts.end(), instr_offsets.begin(), 0i64);
+    std::exclusive_scan(instr_counts.begin(), instr_counts.end(), instr_offsets.begin(), 0ll);
 
     /* Total number of instructions */
     int64_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
@@ -1289,7 +1305,7 @@ void rv_generator_st::regalloc() {
                 }
             }
 
-            auto make_load = [](int64_t dest_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t rs2, uint32_t& jt) {
+            auto make_load = [](int64_t dest_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t& rs2, uint32_t& jt) {
                 /* Construct immediate */
                 uint32_t imm = (4 * (stack_offset - 1)) << 20; 
                 
@@ -1301,7 +1317,7 @@ void rv_generator_st::regalloc() {
                 jt = 0;
             };
 
-            auto make_store = [](int64_t src_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t rs2, uint32_t& jt) {
+            auto make_store = [](int64_t src_reg, uint32_t stack_offset, uint32_t& instr, int64_t& rd, int64_t& rs1, int64_t& rs2, uint32_t& jt) {
                 uint32_t imm = (-4 * (stack_offset - 1));
                 uint32_t lower = (imm & 0x1f) << 7;
                 uint32_t upper = (imm & 0xfe) << 19;
@@ -1374,13 +1390,13 @@ void rv_generator_st::regalloc() {
 
     //dump_instrs();
 
-    auto scatter_indices = avx_buffer<int64_t>::zero(func_count * 4ui64);
-    auto scatter_opcodes = avx_buffer<uint32_t>::zero(func_count * 4ui64);
+    auto scatter_indices = avx_buffer<int64_t>::zero(func_count * 4ull);
+    auto scatter_opcodes = avx_buffer<uint32_t>::zero(func_count * 4ull);
     for (size_t i = 0; i < func_count; ++i) {
         uint32_t preserve_count = std::popcount(preserve_masks[i]);
         uint32_t stack_size = (stack_sizes[i] + overflows[i] + preserve_count + 2) * 4;
         uint32_t lower = (stack_size & 0xFFF) << 20;
-        uint32_t upper = stack_size - (extend(stack_size & 0xFFF)) & 0xFFFFF000;
+        uint32_t upper = (stack_size - (extend(stack_size & 0xFFF))) & 0xFFFFF000;
 
         scatter_indices[(i * 4) + 0] = func_starts[i] + 2;
         scatter_opcodes[(i * 4) + 0] = 0b0000000'00000'00000'000'01000'0110111 | upper; /* lui x8, upper */
@@ -1392,22 +1408,22 @@ void rv_generator_st::regalloc() {
         scatter_opcodes[(i * 4) + 3] = 0b0000000'00000'01000'000'01000'0010011 | lower; /* addi x8, x8, lower */
     }
 
-    auto preserve_indices = avx_buffer<int64_t>::zero(func_count * 64ui64);
-    auto preserve_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ui64);
+    auto preserve_indices = avx_buffer<int64_t>::zero(func_count * 64ull);
+    auto preserve_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ull);
     for (size_t i = 0; i < func_count; ++i) {
         auto preserve_stack_offset = (stack_sizes[i] + overflows[i] + 2) * 4;
         auto p_mask = preserve_masks[i];
 
         for (uint32_t j = 0; j < 64; ++j) {
-            int64_t leading = std::popcount(p_mask & (1ui64 << j) - 1);
+            int64_t leading = std::popcount(p_mask & ((1ull << j) - 1));
             int64_t offset = -(preserve_stack_offset + leading * 4);
-            uint32_t offset_high = (offset & 0xFE0ui32) << 25;
-            uint32_t offset_low = (offset & 0x1Fui32) < 7;
+            uint32_t offset_high = (offset & 0xFE0u) << 25;
+            uint32_t offset_low = (offset & 0x1Fu) < 7;
             uint32_t src = (j % 32) << 20;
             uint32_t store_const = offset_high | offset_low | src;
             /* fsw or sw */
             uint32_t opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0100111 : 0b0000000'00000'01000'010'00000'0100011;
-            if (p_mask & (1ui64 << j)) {
+            if (p_mask & (1ull << j)) {
                 preserve_indices[(i * 64) + j] = func_starts[i] + leading + 6;
                 preserve_opcodes[(i * 64) + j] = opcode | store_const;
             } else {
@@ -1416,14 +1432,14 @@ void rv_generator_st::regalloc() {
         }
     }
 
-    auto load_indices = avx_buffer<int64_t>::zero(func_count * 64ui64);
-    auto load_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ui64);
+    auto load_indices = avx_buffer<int64_t>::zero(func_count * 64ull);
+    auto load_opcodes = avx_buffer<uint32_t>::zero(func_count * 64ull);
     for (size_t i = 0; i < func_count; ++i) {
         auto preserve_stack_offset = (stack_sizes[i] + overflows[i] + 2) * 4;
         auto p_mask = preserve_masks[i];
         
         for (uint32_t j = 0; j < 64; ++j) {
-            int64_t leading = std::popcount(p_mask & ((1ui64 << j)) - 1);
+            int64_t leading = std::popcount(p_mask & (((1ull << j)) - 1));
             int64_t offset = -(preserve_stack_offset + leading * 4);
 
             uint32_t load_offset = static_cast<uint32_t>(offset) << 20;
@@ -1433,7 +1449,7 @@ void rv_generator_st::regalloc() {
             /* flw or lw */
             uint32_t opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0000111 : 0b0000000'00000'01000'010'00000'0000011;
 
-            if (p_mask & (1ui64 << j)) {
+            if (p_mask & (1ull << j)) {
                 load_indices[(i * 64) + j] = func_starts[i] + function_sizes[i] + leading - 7;
                 load_opcodes[(i * 64) + j] = opcode | load_const;
             } else {
@@ -1488,11 +1504,6 @@ void rv_generator_st::fix_jumps() {
         return (instr & 0b1111111) == 0b1100111;
     };
 
-    auto is_branch = [](uint32_t instr) {
-        /* beq/bne/blt/bge/bltu/bgeu */
-        return (instr & 0b1111111) == 0b1100011;
-    };
-
     auto instr_sizes = avx_buffer<int64_t>::zero(instructions.size());
     for (size_t i = 0; i < instructions.size(); ++i) {
         if (is_jump(instructions[i])) {
@@ -1502,7 +1513,7 @@ void rv_generator_st::fix_jumps() {
         }
     }
     auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
-    std::exclusive_scan(instr_sizes.begin(), instr_sizes.end(), instr_offsets.begin(), 0i64);
+    std::exclusive_scan(instr_sizes.begin(), instr_sizes.end(), instr_offsets.begin(), 0ll);
     int64_t instr_count = instr_sizes.back() + instr_offsets.back();
 
     auto new_instr = avx_buffer<uint32_t>::zero(instr_count);
@@ -1542,7 +1553,7 @@ void rv_generator_st::fix_jumps() {
 
             /* The actual jump */
             offsets[(2 * i) + 1] = new_index + 1;
-            opcodes[(2 * i) + 1] = new_instr[new_index] | (lower << 20) | (0b00001ui32 << 15);
+            opcodes[(2 * i) + 1] = new_instr[new_index] | (lower << 20) | (0b00001u << 15);
         } else {
             offsets[(2 * i) + 0] = -1;
             offsets[(2 * i) + 1] = -1;

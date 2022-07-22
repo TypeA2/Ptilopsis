@@ -23,7 +23,7 @@ if is_msvc
     )
 else
     add_project_arguments(
-        [ '-mavx2', '-std=c++20' ],
+        [ '-mavx2', '-std=c++20', '-Wno-implicit-fallthrough', '-Wno-missing-field-initializers' ],
         language: ['c', 'cpp']
     )
 endif

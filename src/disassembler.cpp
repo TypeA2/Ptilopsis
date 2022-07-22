@@ -37,7 +37,6 @@ std::ostream& operator<<(std::ostream& os, std::optional<rvdisasm::rv_register> 
 [[nodiscard]] rvdisasm::instruction_type instr_type(uint32_t instr) {
     using enum rvdisasm::instruction_type;
     uint8_t opcode = instr & 0b1111111;
-    uint8_t funct3 = (instr >> 12) & 0b111;
     switch (opcode) {
         case 0b0110111: return u;
         case 0b0010111: return u;
@@ -312,6 +311,8 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color) {
             os << rd << ", " << rs1 << ", " << rs2 << ", " << rs3;
             break;
         }
+        default:
+            break;
     }
 
     g_color_regs = old_color_regs;

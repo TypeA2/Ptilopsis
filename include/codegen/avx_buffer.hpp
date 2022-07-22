@@ -225,7 +225,7 @@ class avx_buffer {
     }
 
     constexpr void clear() {
-        operator delete(_ptr, std::align_val_t { AVX_ALIGNMENT });
+        operator delete[](_ptr, std::align_val_t {AVX_ALIGNMENT});
         _ptr = nullptr;
         _count = 0;
     }
