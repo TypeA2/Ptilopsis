@@ -94,6 +94,7 @@ constexpr size_t max_node_types = 1 << (sizeof(rv_node_type_t) * std::numeric_li
 constexpr size_t parent_idx_per_node = 3;
 
 constexpr uint64_t preserved_register_mask = 0x0FFC0300'0FFC031F;
+// TODO int side doesn't include s0, should it?
 constexpr uint64_t nonscratch_registers = 0x0FFC0300'0FFC0200;
 
 template <>

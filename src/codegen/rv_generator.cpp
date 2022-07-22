@@ -796,7 +796,7 @@ void rv_generator_st::regalloc() {
         bool swapped;
     };
     auto symbol_registers = std::vector<symbol_data>(used_instrs.size());//) < symbol_data > ::fill(used_instrs.size(), {});
-    /* Map virtual to physical registers */
+    /* Map physical to virtual registers */
     std::vector<avx_buffer<int64_t>> register_state(func_count, avx_buffer<int64_t>::fill(64, -1));
 
     auto current_func_offset = [](int64_t i, uint32_t size, uint32_t start) -> uint32_t {
@@ -818,7 +818,7 @@ void rv_generator_st::regalloc() {
         uint64_t mask;
         /* rd, rs1 and rs2 for this instruction */
         std::array<register_info, 3> reg_info;
-        /* What registers were swapped */
+        /* Which physical registers were swapped. This acts as an array: every >=0 value is a physical register */
         std::array<int64_t, 64> swapped;
         /* Maps physical registers to the virtual registers currently occupying them */
         std::array<int64_t, 64> registers;
@@ -835,14 +835,15 @@ void rv_generator_st::regalloc() {
     };
 
     auto needs_float_reg = [](uint32_t instr, uint32_t offset) {
+        /* offset: rd = 0, rs1 = 1, rs2 = 2*/
         if (instr == 0b1100000'00000'00000'111'00000'1010011) {
-            /* FCVT.W.S */
+            /* FCVT.W.S, float is needed for the source register */
             return offset != 0;
         } else if (instr == 0b1101000'00000'00000'111'00000'1010011) {
-            /* FCVT.S.W */
+            /* FCVT.S.W, float is needed for the destination register */
             return offset == 0;
         } else {
-            /* Any float instruction */
+            /* Any other float instr requires all float registers */
             return (instr & 0b1111111) == 0b1010011;
         }
     };
@@ -880,7 +881,7 @@ void rv_generator_st::regalloc() {
                 }
 
                 if ((new_lifetime_mask & (1ull << i)) != 0) {
-                    /* Copy the virtual to physical register mapping of the registers that don't need to be saved */
+                    /* Copy the virtual-to-physical register mapping of the registers that don't need to be saved */
                     res.registers[i] = register_state[i];
                 } else {
                     res.registers[i] = -1;
@@ -996,7 +997,7 @@ void rv_generator_st::regalloc() {
 
             std::ranges::copy(register_state, res.registers.begin());
 
-            /* Store what virtual registers are held by the physical registers used by rd, rs1 and rs2 */
+            /* Store which virtual registers are held by the physical registers used by rd, rs1 and rs2 */
             res.registers[rd_register] = rd[instr_offset];
 
             /* If rs1 and rs2 are not rd, mark them as free after this */
@@ -1044,16 +1045,17 @@ void rv_generator_st::regalloc() {
             old_offsets[j] = current_func_offset(i, function_sizes[j], func_starts[j]);
         }
 
-        std::cout << old_offsets << "\n";
-
         /* Analyze all instructions we need to analyze */
+
+        /* Store a copy of the virtual to physical register mapping from before this instruction */
         auto reg_state_copy = register_state;
+
+        /* At most rd, rs1 and rs2 are updated every instruction */
         std::vector<std::array<register_info, 3>> updated_symbols(func_count);
+
         std::vector<std::array<int64_t, 64>> swapped_registers(func_count);
         for (size_t j = 0; j < func_count; ++j) {
             auto res = lifetime_analyze(symbol_registers, used_instrs, old_offsets[j], lifetime_masks[j], register_state[j], func_starts[j], function_sizes[j]);
-
-            //std::cout << func_starts[j] << ", " << old_offsets[j] << ", " << (func_starts[j] + old_offsets[j]) << '\n';
 
             lifetime_masks[j] = res.mask;
             updated_symbols[j] = res.reg_info;
@@ -1061,38 +1063,56 @@ void rv_generator_st::regalloc() {
             register_state[j] = res.registers;
         }
 
-
-        std::vector<int64_t> swap_data_regs(func_count * 64);
+        std::vector<int64_t> swap_data_regs(func_count * 64, -1);
         std::vector<symbol_data> swap_data_sym(func_count * 64);
         for (size_t k = 0; k < func_count; ++k) {
+            /* For every physical register */
             for (size_t j = 0; j < 64; ++j) {
                 auto reg = swapped_registers[k][j];
                 if (reg < 0) {
+                    /* Not swapped out, do nothing */
                     swap_data_regs[(k * func_count) + j] = -1;
                 } else {
+                    /* Physical register j is swapped during this instruction */
+                    
+                    /* The virtual register being swapped */
                     swap_data_regs[(k * func_count) + j] = reg_state_copy[k][reg] - 64;
+
+                    /* Reverse lookup for the physical register it's contained in */
                     swap_data_sym[(k * func_count) + j] = get_symbol_data(symbol_registers, reg_state_copy[k][reg]);
+
+                    /* Mark it as swapped out*/
                     swap_data_sym[(k * func_count) + j].swapped = true;
                 }
             }
         }
+
+        /* All registers that were used */
         std::vector<register_info> symb_data(func_count * 3);
         for (size_t j = 0; j < func_count; ++j) {
             for (size_t k = 0; k < 3; ++k) {
-                symb_data[(j * func_count) + k] = updated_symbols[j][k];
+                symb_data[(j * 3) + k] = updated_symbols[j][k];
             }
         }
-        std::vector<int64_t> symbol_offsets(swap_data_regs.size() + symb_data.size());
+        std::vector<int64_t> symbol_offsets(swap_data_regs.size() + symb_data.size(), -1);
         std::vector<symbol_data> all_symbol_data(swap_data_sym.size() + symb_data.size());
+
+        /* Gather all registers touched by being swapped */
         for (size_t j = 0; j < swap_data_regs.size(); ++j) {
+            /* Virtual register being swapped */
             symbol_offsets[j] = swap_data_regs[j];
+
+            /* The physical reg the virtual register is in */
             all_symbol_data[j] = swap_data_sym[j];
         }
+
+        /* And all registers touched by being used */
         for (size_t j = 0; j < symb_data.size(); ++j) {
             symbol_offsets[swap_data_regs.size() + j] = symb_data[j].reg;
             all_symbol_data[swap_data_regs.size() + j] = symb_data[j].sym;
         }
 
+        /* Update the mask keeping track of all the used registers in this function */
         for (size_t j = 0; j < preserve_masks.size(); ++j) {
             preserve_masks[j] |= lifetime_masks[j];
         }
@@ -1100,29 +1120,37 @@ void rv_generator_st::regalloc() {
         /* scatter symbol_registers symbol_offsets all_symbol_data */
         for (size_t j = 0; j < symbol_offsets.size(); ++j) {
             if (symbol_offsets[j] >= 0 && symbol_offsets[j] < static_cast<int64_t>(symbol_registers.size())) {
+                /* Update the touched virtual register's info */
                 symbol_registers[symbol_offsets[j]] = all_symbol_data[j];
             }
         }
     }
 
     for (size_t i = 0; i < preserve_masks.size(); ++i) {
+        // TODO surely this should include s0?
+        /* s1-s11, fs0-fs11 are callee-saved, they won't be considered "used" */
         preserve_masks[i] &= nonscratch_registers;
     }
 
-    /* Actually bool */
+    /* Actually bool, int used for scan operation */
     auto func_start_bools = avx_buffer<int16_t>::zero(instructions.size());
     for (auto start : func_starts) {
         func_start_bools[start] = 1;
     }
 
+    /* Fore very instruction, what function index it belongs to */
     auto reverse_func_id_map = avx_buffer<int64_t>::zero(instructions.size());
     std::inclusive_scan(func_start_bools.begin(), func_start_bools.end(), reverse_func_id_map.begin());
     
+    /* For every virtual reg, store whether it was swapped */
     auto spill_offsets = avx_buffer<int64_t>::zero(symbol_registers.size());
     for (size_t i = 0; i < symbol_registers.size(); ++i) {
         spill_offsets[i] = symbol_registers[i].swapped;
     }
+
+    /* For every function, add all swapped registers */
     for (size_t i = 0; i < symbol_registers.size(); ++i) {
+        /* Segmented scan: restart counting at every function */
         if (!func_start_bools[i]) {
             spill_offsets[i] = i > 0 ? spill_offsets[i - 1] : 0;
         }
@@ -1144,26 +1172,33 @@ void rv_generator_st::regalloc() {
     };
 
     auto count_instr_add_preserve = [this, func_count](std::span<uint64_t> preserve_masks, std::span<int64_t> counts) {
-        auto offsets = avx_buffer<int64_t>::zero(func_count);
-        auto data = avx_buffer<int64_t>::zero(func_count);
         for (size_t i = 0; i < func_count; ++i) {
+            /* Number of registers that need to be preserved*/
             auto preserved = std::popcount(preserve_masks[i]);
             auto start = func_starts[i] + 5;
             auto end = func_starts[i] + function_sizes[i] - 6;
 
+            /* Add space for the required loads and stores */
             counts[start] += preserved;
             counts[end] += preserved;
         }
     };
 
+    /* For every instruction, calculate how many instructions are actually needed,
+     * including instructions to load and store the arguments and the result
+     */
     auto instr_counts = avx_buffer<int64_t>::zero(instructions.size());
     for (size_t i = 0; i < instructions.size(); ++i) {
         instr_counts[i] = count_instr(static_cast<uint32_t>(i), symbol_registers, used_instrs);
     }
+    /* Add space for the instructions to store callee-saved registers */
     count_instr_add_preserve(preserve_masks, instr_counts);
+
+    /* New instruction offsets that take spills into account */
     auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
     std::exclusive_scan(instr_counts.begin(), instr_counts.end(), instr_offsets.begin(), 0i64);
 
+    /* Total number of instructions */
     int64_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
 
     auto new_instr = avx_buffer<uint32_t>::zero(new_instr_count);
@@ -1181,9 +1216,13 @@ void rv_generator_st::regalloc() {
 
     for (size_t i = 0; i < instructions.size(); ++i) {
         if (used_instrs[i]) {
+            /* Instruction wasn't optimized out */
+
+            /* New index of this instruction */
             auto base_offset = instr_offsets[i];
             int64_t rs1_load_offset = -1;
             uint32_t rs1_stack_offset = 0;
+            /* If rs1 isn't predetermined and was swapped,, it must be loaded */
             if (rs1[i] >= 64 && symbol_registers[rs1[i] - 64].swapped) {
                 rs1_load_offset = base_offset;
                 rs1_stack_offset = static_cast<uint32_t>(spill_offsets[rs1[i] - 64]);
@@ -1191,28 +1230,36 @@ void rv_generator_st::regalloc() {
 
             int64_t rs2_load_offset = -1;
             uint32_t rs2_stack_offset = 0;
+            /* Same for rs2, but offset it by 1 if rs1 also had to be loaded */
             if (rs2[i] >= 64 && symbol_registers[rs2[i] - 64].swapped) {
                 rs2_load_offset = base_offset + ((rs1_load_offset > 0) ? 1 : 0);
                 rs2_stack_offset = static_cast<uint32_t>(spill_offsets[rs2[i] - 64]);
             }
 
+            /* The relative position of the actual instruction */
             int64_t main_instr_offset = base_offset + ((rs1_load_offset > 0) ? 1 : 0) + ((rs2_load_offset > 0) ? 1 : 0);
             int64_t rd_offset = -1;
             uint32_t rd_stack_offset = 0;
+
+            /* If rd needs to be stored we also need a store after the main instruction */
             if (rd[i] >= 64 && symbol_registers[rd[i] - 64].swapped) {
                 rd_offset = main_instr_offset + 1;
                 rd_stack_offset = static_cast<uint32_t>(spill_offsets[rd[i] - 64]);
             }
 
+            /* Function index */
             auto func_id = reverse_func_id_map[i] - 1;
 
+            /* If rd is predetermined, use that, else retrieve the correct physical reg */
             int64_t allocated_rd = rd[i];
             if (rd[i] >= 64) {
                 allocated_rd = symbol_registers[rd[i] - 64].reg;
             }
 
+            /* Same as with rd */
             int64_t allocated_rs1 = rs1[i];
             if (rs1[i] >= 64) {
+                /* If rs1 was swapped it'll be loaded into either t0 or ft5 */
                 if (symbol_registers[rs1[i] - 64].swapped) {
                     if (needs_float_reg(instructions[i], 1)) {
                         allocated_rs1 = 37;
@@ -1220,12 +1267,14 @@ void rv_generator_st::regalloc() {
                         allocated_rs1 = 5;
                     }
                 } else {
+                    /* Not swapped, already in a register */
                     allocated_rs1 = symbol_registers[rs1[i] - 64].reg;
                 }
             }
 
             int64_t allocated_rs2 = rs2[i];
             if (rs2[i] >= 64) {
+                /* If rs2 was swapped it'll be loaded into either t1 or ft6*/
                 if (symbol_registers[rs2[i] - 64].swapped) {
                     if (needs_float_reg(instructions[i], 2)) {
                         allocated_rs2 = 38;
@@ -1233,6 +1282,7 @@ void rv_generator_st::regalloc() {
                         allocated_rs2 = 6;
                     }
                 } else {
+                    /* Already in a register */
                     allocated_rs2 = symbol_registers[rs2[i] - 64].reg;
                 }
             }
@@ -1263,21 +1313,29 @@ void rv_generator_st::regalloc() {
             };
 
             /* load into temp regs */
+            /* If needed, make an instruction to load rs1 */
             new_indices[(4 * i) + 0] = rs1_load_offset;
-            // TODO shouldn't this be func_id - 1?
+            /* lw into t0 */
             make_load(5, rs1_stack_offset + stack_sizes[func_id], temp_instr[4 * i], temp_rd[4 * i], temp_rs1[4 * i], temp_rs2[4 * i], temp_jt[4 * i]);
 
+            /* lw into t1 */
             new_indices[(4 * i) + 1] = rs2_load_offset;
             make_load(6, rs2_stack_offset + stack_sizes[func_id],
                 temp_instr[(4 * i) + 1], temp_rd[(4 * i) + 1], temp_rs1[(4 * i) + 1], temp_rs2[(4 * i) + 1], temp_jt[(4 * i) + 1]);
 
+            /* Fields for the main instruction */
             new_indices[(4 * i) + 2] = main_instr_offset;
             temp_instr[(4 * i) + 2] = instructions[i];
             temp_rd[(4 * i) + 2] = allocated_rd;
             temp_rs1[(4 * i) + 2] = allocated_rs1;
             temp_rs2[(4 * i) + 2] = allocated_rs2;
+            /* Translate the jt to the new offset */
             temp_jt[(4 * i) + 2] = static_cast<uint32_t>(instr_offsets[jt[i]]);
 
+            std::cout << i << ": " << rd[i] << ", " << rs1[i] << ", " << rs2[i] << '\n';
+            std::cout << "    " << allocated_rd << ", " << allocated_rs1 << ", " << allocated_rs2 << '\n';
+
+            /* Store from the result */
             new_indices[(4 * i) + 3] = rd_offset;
             make_store(allocated_rd, rd_stack_offset + stack_sizes[func_id],
                 temp_instr[(4 * i) + 3], temp_rd[(4 * i) + 3], temp_rs1[(4 * i) + 3], temp_rs2[(4 * i) + 3], temp_jt[(4 * i) + 3]);
@@ -1289,7 +1347,7 @@ void rv_generator_st::regalloc() {
         }
     }
 
-    /* scatter */
+    /* Scatter */
     for (size_t i = 0; i < new_indices.size(); ++i) {
         if (new_indices[i] >= 0 && new_indices[i] < new_instr_count) {
             new_instr[new_indices[i]] = temp_instr[i];
@@ -1310,7 +1368,7 @@ void rv_generator_st::regalloc() {
     rs2 = new_rs2;
     jt = new_jt;
 
-    //dump_instrs();
+    dump_instrs();
 
     fix_func_tab(instr_offsets);
 
