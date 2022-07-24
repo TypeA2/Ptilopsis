@@ -1,8 +1,8 @@
 fn comp[]: int {
-    if 4 {
+    if 8 == 43 {
         return 42;
     } else {
-        return -12;
+        return 12;
     }
 }
 

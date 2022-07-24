@@ -115,7 +115,7 @@ void rv_generator_st::process() {
 }
 
 void rv_generator_st::dump_instrs() {
-    std::cout << rvdisasm::color::extra << " == " << instructions.size() << " instructions ==\n" << rvdisasm::color::white;
+    std::cout << rvdisasm::color::extra << " == " << instructions.size() << " instructions ==             rd rs1 rs2 jt\n" << rvdisasm::color::white;
     size_t digits = static_cast<size_t>(std::log10(instructions.size()) + 1);
     for (size_t i = 0; i < instructions.size(); ++i) {
         std::string instr = rvdisasm::instruction(instructions[i], true);
@@ -694,7 +694,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
-    dump_instrs();
+    //dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -1586,4 +1586,6 @@ void rv_generator_st::postprocess() {
 
         instructions[i] |= (rd << 7) | (rs1 << 15) | (rs2 << 20);
     }
+
+    //dump_instrs();
 }
