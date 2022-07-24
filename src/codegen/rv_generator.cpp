@@ -396,7 +396,7 @@ void rv_generator_st::isn_gen() {
                         return parent_arg_idx();
                     }
 
-                    return -1;
+                    [[fallthrough]];
 
                 default:
                     return -1;
@@ -521,13 +521,13 @@ void rv_generator_st::isn_gen() {
                     //if (node_types[idx] == rv_node_type::func_decl_dummy) {
                     //    std::cerr << "instruction at " << (instr_offset + i) << "\n";
                     //}
-                    uint32_t instr_in_buf = instr_idx + i;
+                    uint32_t instr_in_buf = node_locations[idx] + i;
                     auto node_type = node_types[idx];
                     auto data_type = result_types[idx];
-                    auto get_output_register = [this, idx, i, instr_in_buf, get_parent_arg_idx](rv_node_type node_type, DataType resulting_type) -> int64_t {
+                    auto get_output_register = [this, idx, i, get_parent_arg_idx](rv_node_type node_type, DataType resulting_type, uint32_t instr_in_buf) -> int64_t {
                         // TODO enum
 
-                        /* the type of calculation required to get the output register */
+                        /* The type of calculation required to get the output register */
                         auto calc_type = get_output_table[as_index(node_type)][i][as_index(resulting_type)];
                         switch (calc_type) {
                             case 1: return node_data[idx] + 10 /* func call arg: int
@@ -539,7 +539,7 @@ void rv_generator_st::isn_gen() {
                             case 4: return 10; /* return values: invalid, void, int, int_ref, float_ref */
                             default: {
                                 bool has_output_val = (get_parent_arg_idx(static_cast<uint32_t>(idx), i) != -1)
-                                    && has_output[as_index(node_type)][i][as_index(resulting_type)];
+                                    || has_output[as_index(node_type)][i][as_index(resulting_type)];
                                 if (has_output_val) {
                                     return instr_in_buf + 64;
                                 }
@@ -548,7 +548,7 @@ void rv_generator_st::isn_gen() {
                         }
                     };
 
-                    auto rd = get_output_register(node_type, result_types[idx]);
+                    auto rd = get_output_register(node_type, result_types[idx], instr_in_buf);
 
                     auto get_instr_loc = [this](uint32_t node, uint32_t instr_in_buf, uint32_t relative_offset, avx_buffer<int64_t>& registers) -> int64_t {
                         if (relative_offset == 1 && (node_types[node] == rv_node_type::if_else_statement)) {
@@ -642,8 +642,8 @@ void rv_generator_st::isn_gen() {
                     };
 
                     current_rd[instr_idx] = rd;
-                    current_rs1[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 0, node_locations[idx] + i, i);
-                    current_rs2[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 1, node_locations[idx] + i, i);
+                    current_rs1[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 0, instr_in_buf, i);
+                    current_rs2[instr_idx] = node_get_instr_arg(static_cast<uint32_t>(idx), local_registers, 1, instr_in_buf, i);
                     current_jt[instr_idx] = instr_jt(static_cast<uint32_t>(idx), i, local_registers);
 
                     /*std::cout << "node ";
