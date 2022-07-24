@@ -27,8 +27,6 @@
 #   pragma warning(disable: 26451)
 #endif
 
-
-
 using namespace magic_enum::bitwise_operators;
 using namespace magic_enum::ostream_operators;
 
@@ -224,7 +222,8 @@ void rv_generator_st::isn_cnt() {
         }
 
         if (node_types[i] != invalid) {
-            auto parent_type = node_types[parents[i]];
+            /* Parent-less top-level node is a statement list */
+            auto parent_type = (parents[i] >= 0) ? node_types[parents[i]] : rv_node_type::statement_list;
 
             if (child_idx[i] == 0 && (parent_type == if_statement || parent_type == if_else_statement)) {
                 /* if and if_else, first child, this is the conditional node */
@@ -706,7 +705,7 @@ void rv_generator_st::optimize() {
         initial_used_registers[2 * i] = rs1[i] - 64;
         initial_used_registers[2 * i + 1] = rs2[i] - 64;
     }
-    avx_buffer<bool> used_registers { instructions.size() };
+    auto used_registers = avx_buffer<bool>::zero(instructions.size());
     // TODO bounds checking?
     for (size_t i = 0; i < initial_used_registers_length; ++i) {
         if (initial_used_registers[i] >= 0 && initial_used_registers[i] < static_cast<int64_t>(instructions.size())) {
