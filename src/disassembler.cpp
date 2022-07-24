@@ -325,7 +325,7 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
 
     size_t words = buf.size();
 
-    size_t digits = static_cast<size_t>(std::ceil(std::log(words) / std::log(16)));
+    size_t digits = static_cast<size_t>(std::ceil(std::log(words) / std::log(16))) + 1;
     size_t count_digits = static_cast<size_t>(std::log10(words)) + 1;
 
     os << color::extra << std::setfill('0')

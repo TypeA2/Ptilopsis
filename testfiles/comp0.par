@@ -7,5 +7,6 @@ fn comp[]: int {
 }
 
 fn main[]: int {
-    return comp[];
+    var x = comp[];
+    return x;
 }

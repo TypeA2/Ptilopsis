@@ -7,5 +7,6 @@ function comp() : int {
 }
 
 function main() : int {
-    return comp();
+    x:int = comp();
+    return x;
 }

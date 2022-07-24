@@ -222,7 +222,7 @@ constexpr auto generate_size_mapping() {
     res[func_decl]     = { 6, 6, 6, 6, 6, 6 };
     res[func_arg_list] = { 0, 0, 0, 0, 0, 0 };
 
-    res[func_call_expression] = { 3, 3, 3, 3, 3, 3 };
+    res[func_call_expression] = { 3, 2, 3, 3, 3, 3 };
     res[func_call_arg_list]   = { 0, 0, 0, 0, 0, 0 };
 
     res[if_statement]      = { 0, 0, 0, 0, 0, 0 };
@@ -1087,5 +1087,4 @@ constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::FUNC_DECL_DUMMY]    = */ rv_node_type::func_decl_dummy,
     /* [NodeType::RETURN_STAT]        = */ rv_node_type::return_statement,
 };
-
 
