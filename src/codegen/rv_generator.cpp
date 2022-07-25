@@ -694,7 +694,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
-    dump_instrs();
+    //dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -1498,6 +1498,7 @@ void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
 }
 
 void rv_generator_st::fix_jumps() {
+    dump_instrs();
     auto is_jump = [](uint32_t instr) {
         /* jalr */
         return (instr & 0b1111111) == 0b1100111;
@@ -1544,10 +1545,11 @@ void rv_generator_st::fix_jumps() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         int64_t new_index = instr_offsets[i];
         if (is_jump(new_instr[new_index])) {
-            uint32_t target = new_jt[new_index] * 4;
-            uint32_t upper = (target & 0xFFFFF000) >> 12;
-            uint32_t lower = target & 0xFFF;
-            uint32_t sign = (target >> 11) & 1;
+            int64_t target = new_jt[new_index] * 4;
+            uint32_t delta = static_cast<uint32_t>(target - (new_index * 4));
+            uint32_t upper = (delta & 0xFFFFF000) >> 12;
+            uint32_t lower = delta & 0xFFF;
+            uint32_t sign = (delta >> 11) & 1;
             uint32_t upper_constant = upper + sign;
 
             /* auipc x1 */
@@ -1601,6 +1603,4 @@ void rv_generator_st::postprocess() {
 
         instructions[i] |= (rd << 7) | (rs1 << 15) | (rs2 << 20);
     }
-
-    //dump_instrs();
 }

@@ -1,3 +1,7 @@
+function empty() : void {
+    
+}
+
 function comp() : int {
     if (8 == 43) {
         return 42;
