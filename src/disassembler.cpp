@@ -210,7 +210,7 @@ std::ostream& operator<<(std::ostream& os, std::optional<rvdisasm::rv_register> 
     return instr ? "unknown" : "(zero)";
 }
 
-std::ostream& format_args(std::ostream& os, uint32_t instr, bool color) {
+std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t addr) {
     auto flags = os.flags();
     bool old_color_regs = g_color_regs;
     g_color_regs = color;
@@ -279,7 +279,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color) {
             }
             auto imm_signed = static_cast<int32_t>(imm);
 
-            os << rs1 << ", " << rs2 << ", " << color_imm << imm_signed << color_white;
+            os << rs1 << ", " << rs2 << ", " << color_imm << std::hex << std::showbase << (addr + imm_signed) << std::dec << color_white;
             break;
         }
         case instruction_type::u: {
@@ -342,7 +342,7 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
             << "   " << color::instr << std::setw(9) << std::setfill(' ') << std::left
             << instr_name(instr) << color::white << ' ';
 
-        format_args(os, instr, true);
+        format_args(os, instr, true, start_addr);
 
         os << '\n';
 
@@ -360,7 +360,7 @@ std::string rvdisasm::instruction(uint32_t instr, bool pad) {
         res << std::setw(9) << std::setfill(' ') << std::left;
     }
     res << instr_name(instr) << ' ';
-    format_args(res, instr, false);
+    format_args(res, instr, false, 0);
 
     return res.str();
 }

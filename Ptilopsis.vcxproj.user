@@ -3,21 +3,21 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp0.ptl</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp0.ptl</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp0.ptl</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp0.ptl</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

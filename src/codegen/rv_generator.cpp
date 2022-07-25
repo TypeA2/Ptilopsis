@@ -458,8 +458,8 @@ void rv_generator_st::isn_gen() {
 
     // TODO more parallel
     /* For every level*/
-    for (size_t i = 0; i < max_depth + 1; ++i) {
-        size_t current_depth = max_depth - i;
+    for (size_t j = 0; j < max_depth + 1; ++j) {
+        size_t current_depth = max_depth - j;
 
         uint32_t start_index = depth_starts[current_depth];
         uint32_t end_index = (current_depth == max_depth)
@@ -656,14 +656,14 @@ void rv_generator_st::isn_gen() {
                         << ", rs2: " << current_rs2[instr_idx]
                         << ", jt: " << current_jt[instr_idx]
                         << " -> " << rvdisasm::instruction(current_instructions[instr_idx]) << '\n';*/
-                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), rd, node_locations[idx] + i);
+                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), rd, instr_in_buf);
                 } else if (i == 0) {
                     /* if no instruction present, propagate */
                     //std::cerr << "start\n";
                     instruction_indices[instr_idx] = -1;
                     parent_indices[instr_idx] = static_cast<int32_t>(get_parent_arg_idx(static_cast<uint32_t>(idx), 0));
                     current_instructions[instr_idx] = 0;
-                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), 0, instr_idx);
+                    new_regs[instr_idx] = get_data_prop_value(static_cast<uint32_t>(idx), 0, node_locations[idx]);
                     //std::cerr << "parent_index: " << parent_indices[instr_idx] << " for " << idx << ": " << new_regs[instr_idx] << '\n';
                 } else {
                     // std::cerr << "empty\n";
@@ -694,7 +694,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
-    //dump_instrs();
+    dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -1503,6 +1503,11 @@ void rv_generator_st::fix_jumps() {
         return (instr & 0b1111111) == 0b1100111;
     };
 
+    auto is_branch = [](uint32_t instr) {
+        /* beq and friends */
+        return (instr & 0b1111111) == 0b1100011;
+    };
+
     auto instr_sizes = avx_buffer<int64_t>::zero(instructions.size());
     for (size_t i = 0; i < instructions.size(); ++i) {
         if (is_jump(instructions[i])) {
@@ -1553,6 +1558,16 @@ void rv_generator_st::fix_jumps() {
             /* The actual jump */
             offsets[(2 * i) + 1] = new_index + 1;
             opcodes[(2 * i) + 1] = new_instr[new_index] | (lower << 20) | (0b00001u << 15);
+        } else if (is_branch(new_instr[new_index])) {
+            int64_t target = new_jt[new_index] * 4;
+            uint32_t delta = static_cast<uint32_t>(target - (new_index * 4));
+            uint32_t sign     = (delta >> 12) & 1;
+            uint32_t bit_11   = (delta >> 11) & 1;
+            uint32_t bit_10_5 = (delta >> 5) & 0b11111;
+            uint32_t bit_1_4  = (delta >> 1) & 0b1111;
+
+            offsets[2 * i] = new_index;
+            opcodes[2 * i] = new_instr[new_index] | (sign << 31) | (bit_11 << 7) | (bit_10_5 << 25) | (bit_1_4 << 8);
         } else {
             offsets[(2 * i) + 0] = -1;
             offsets[(2 * i) + 1] = -1;
