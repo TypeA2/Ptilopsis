@@ -26,7 +26,7 @@ namespace rvdisasm {
         x24, x25, x26, x27, x28, x29, x30, x31
     };
 
-    std::ostream& disassemble(std::ostream& os, std::span<uint32_t> buf, uint64_t start_addr = 0x0);
+    std::ostream& disassemble(std::ostream& os, std::span<uint32_t> buf, uint64_t start_addr = 0x0, std::span<uint64_t> func_starts = {});
 
     [[nodiscard]] std::string instruction(uint32_t instr, bool pad = false);
 }

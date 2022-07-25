@@ -642,9 +642,9 @@ constexpr auto generate_instr_table() {
         { err, err, 0b0000000'00000'00000'000'00000'0010011, 0b0000000'00000'00000'000'00000'0010011, err, err },
 
         /* fmv.w.x */
-        { err, err,                                     err, 0b1111000'00000'00000'000'00000'1010011, err, err },
+        { err, err, err, 0b1111000'00000'00000'000'00000'1010011, err, err },
         no_instr
-    };;
+    };
     res[cast_expr] = {
         /* fcvt.w.s, fcvt.s.w */
         ArrayForTypes<uint32_t> { err, err, 0b1100000'00000'00000'111'00000'1010011, 0b1101000'00000'00000'111'00000'1010011, err, err },

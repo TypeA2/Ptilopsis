@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <ranges>
 
 #include <magic_enum.hpp>
 
@@ -320,7 +321,7 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
     return os;
 }
 
-std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, uint64_t start_addr) {
+std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, uint64_t start_addr, std::span<uint64_t> func_starts) {
     std::ios_base::fmtflags f{ os.flags() };
 
     size_t words = buf.size();
@@ -332,7 +333,15 @@ std::ostream& rvdisasm::disassemble(std::ostream& os, std::span<uint32_t> buf, u
        << std::dec << buf.size() << color::white << " instructions, starting at "
        << color::imm << "0x" << std::hex << std::setw(digits) << start_addr << color::white << std::dec <<'\n';
 
+    size_t func_index = 0;
+
     for (uint32_t instr : buf) {
+        if (std::ranges::find(func_starts, (start_addr / 4)) != func_starts.end()) {
+            for (size_t i = 0; i < (count_digits + 3 + digits + 2 + 12 + 1); ++i) {
+                os << ' ';
+            }
+            os << "func" << func_index++ << ":\n";
+        }
         os  << color::extra << std::dec << std::setw(count_digits) << std::setfill(' ') << std::right << (start_addr / 4) << color::white << "   "
             << std::hex << std::setw(digits) << std::setfill('0') << std::right << start_addr << ": "
             << ' ' << color::extra << std::setw(2) << ((instr >> 24) & 0xFF) << color::white

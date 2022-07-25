@@ -96,7 +96,8 @@ std::ostream& rv_generator::print(std::ostream& os) const {
 #endif
 
     if (instructions) {
-        rvdisasm::disassemble(os, instructions, 0);
+        std::vector<uint64_t> func_starts { this->func_starts.begin(), this->func_starts.end() };
+        rvdisasm::disassemble(os, instructions, 0, func_starts);
     }
 
     os.flags(f);
@@ -517,7 +518,7 @@ void rv_generator_st::isn_gen() {
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
                 auto local_registers = registers;
                 /* This corresponds to compile_node */
-                if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[i])]) {
+                if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[idx])]) {
                     //if (node_types[idx] == rv_node_type::func_decl_dummy) {
                     //    std::cerr << "instruction at " << (instr_offset + i) << "\n";
                     //}
@@ -599,7 +600,7 @@ void rv_generator_st::isn_gen() {
                     // TODO per-node copy registers
                     //std::cout << "rd for " << idx << ": " << rd << '\n';
                     //std::cout <<  << " for " << idx << '\n';
-                    auto instr_loc = get_instr_loc(static_cast<uint32_t>(idx), node_locations[idx] + i, i, local_registers);
+                    auto instr_loc = get_instr_loc(static_cast<uint32_t>(idx), instr_in_buf, i, local_registers);
                     //std::cout << instr_loc << '\n';
                     instruction_indices[instr_idx] = static_cast<int32_t>(instr_loc);
                     parent_indices[instr_idx] = static_cast<int32_t>(get_parent_arg_idx(static_cast<uint32_t>(idx), i));
@@ -694,7 +695,7 @@ void rv_generator_st::isn_gen() {
         }
     }
 
-    //dump_instrs();
+    dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -1498,7 +1499,7 @@ void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
 }
 
 void rv_generator_st::fix_jumps() {
-    dump_instrs();
+    //dump_instrs();
     auto is_jump = [](uint32_t instr) {
         /* jalr */
         return (instr & 0b1111111) == 0b1100111;
@@ -1513,6 +1514,8 @@ void rv_generator_st::fix_jumps() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         if (is_jump(instructions[i])) {
             instr_sizes[i] = 2;
+        } else if (instructions[i] == 0) {
+            instr_sizes[i] = 0;
         } else {
             instr_sizes[i] = 1;
         }
@@ -1565,8 +1568,8 @@ void rv_generator_st::fix_jumps() {
             uint32_t delta = static_cast<uint32_t>(target - (new_index * 4));
             uint32_t sign     = (delta >> 12) & 1;
             uint32_t bit_11   = (delta >> 11) & 1;
-            uint32_t bit_10_5 = (delta >> 5) & 0b11111;
-            uint32_t bit_1_4  = (delta >> 1) & 0b1111;
+            uint32_t bit_10_5 = (delta >>  5) & 0b11111;
+            uint32_t bit_1_4  = (delta >>  1) & 0b1111;
 
             offsets[2 * i] = new_index;
             opcodes[2 * i] = new_instr[new_index] | (sign << 31) | (bit_11 << 7) | (bit_10_5 << 25) | (bit_1_4 << 8);
