@@ -787,7 +787,7 @@ void rv_generator_st::optimize() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
     }
-    //dump_instrs();
+   // dump_instrs();
 }
 
 void rv_generator_st::regalloc() {
@@ -1482,7 +1482,7 @@ void rv_generator_st::regalloc() {
             jt[all_indices[i]] = 0;
         }
     }
-
+    //dump_instrs();
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
@@ -1500,7 +1500,7 @@ void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
 }
 
 void rv_generator_st::fix_jumps() {
-    dump_instrs();
+    //dump_instrs();
     auto is_jump = [](uint32_t instr) {
         /* jalr but not a return-from-function (jalr zero, 0(ra))*/
         return ((instr & 0b1111111) == 0b1100111) && (instr != 0b0000000'00000'00001'000'00000'1100111);
@@ -1546,6 +1546,9 @@ void rv_generator_st::fix_jumps() {
 
     auto offsets = avx_buffer<int64_t>::zero(instructions.size() * 2);
     auto opcodes = avx_buffer<uint32_t>::zero(instructions.size() * 2);
+    auto temp_rd = avx_buffer<int64_t>::zero(instructions.size() * 2);
+    auto temp_rs1 = avx_buffer<int64_t>::zero(instructions.size() * 2);
+    auto temp_rs2 = avx_buffer<int64_t>::zero(instructions.size() * 2);
 
     for (size_t i = 0; i < instructions.size(); ++i) {
         int64_t new_index = instr_offsets[i];
@@ -1575,6 +1578,11 @@ void rv_generator_st::fix_jumps() {
 
             offsets[2 * i] = new_index;
             opcodes[2 * i] = new_instr[new_index] | (sign << 31) | (bit_11 << 7) | (bit_10_5 << 25) | (bit_1_4 << 8);
+            temp_rd[2 * i] = new_rd[new_index];
+            temp_rs1[2 * i] = new_rs1[new_index];
+            temp_rs2[2 * i] = new_rs2[new_index];
+
+            offsets[(2 * i) + 1] = -1;
         } else {
             offsets[(2 * i) + 0] = -1;
             offsets[(2 * i) + 1] = -1;
@@ -1585,9 +1593,9 @@ void rv_generator_st::fix_jumps() {
         if (offsets[i] >= 0 && offsets[i] < instr_count) {
             new_instr[offsets[i]] = opcodes[i];
             new_jt[offsets[i]] = 0;
-            new_rd[offsets[i]] = 0;
-            new_rs1[offsets[i]] = 0;
-            new_rs2[offsets[i]] = 0;
+            new_rd[offsets[i]] = temp_rd[i];
+            new_rs1[offsets[i]] = temp_rs1[i];
+            new_rs2[offsets[i]] = temp_rs2[i];
         }
     }
 
@@ -1598,6 +1606,8 @@ void rv_generator_st::fix_jumps() {
     jt = new_jt;
 
     fix_func_tab(instr_offsets);
+
+    //dump_instrs();
 }
 
 void rv_generator_st::postprocess() {

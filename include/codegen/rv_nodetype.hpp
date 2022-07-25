@@ -444,7 +444,7 @@ constexpr auto generate_parent_arg_idx_lookup() {
     res[while_statement]   = { two, zero, zero, zero };
     res[if_else_statement] = { two, zero, zero, zero };
 
-    res[eq_expr]  = { two, zero, zero, zero };
+    res[eq_expr]  = { two, { 0, 0, 1, 0, 0, 0 }, zero, zero};
     res[neq_expr] = { two, zero, zero, zero };
     res[lt_expr]  = { two, zero, zero, zero };
     res[gt_expr]  = { two, zero, zero, zero };
