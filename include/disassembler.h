@@ -13,6 +13,7 @@ namespace rvdisasm {
         constexpr std::string_view imm = "\033[38;5;114m";
         constexpr std::string_view extra = "\033[38;5;114m";
         constexpr std::string_view index = "\033[38;5;94m";
+        constexpr std::string_view comment = "\033[38;5;22m";
     }
 
     enum class instruction_type {

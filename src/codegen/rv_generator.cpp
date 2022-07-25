@@ -694,8 +694,8 @@ void rv_generator_st::isn_gen() {
             }
         }
     }
-
-    dump_instrs();
+    //std::cout << func_ends << '\n';
+    //dump_instrs();
 }
 
 void rv_generator_st::optimize() {
@@ -782,7 +782,7 @@ void rv_generator_st::optimize() {
 
         used_registers = result;
     }
-
+    
     used_instrs = avx_buffer<bool> { instructions.size() };
     for (size_t i = 0; i < instructions.size(); ++i) {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
@@ -791,6 +791,7 @@ void rv_generator_st::optimize() {
 }
 
 void rv_generator_st::regalloc() {
+    //dump_instrs();
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
     stack_sizes = avx_buffer<uint32_t>::zero(func_count);
@@ -1499,10 +1500,10 @@ void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
 }
 
 void rv_generator_st::fix_jumps() {
-    //dump_instrs();
+    dump_instrs();
     auto is_jump = [](uint32_t instr) {
-        /* jalr */
-        return (instr & 0b1111111) == 0b1100111;
+        /* jalr but not a return-from-function (jalr zero, 0(ra))*/
+        return ((instr & 0b1111111) == 0b1100111) && (instr != 0b0000000'00000'00001'000'00000'1100111);
     };
 
     auto is_branch = [](uint32_t instr) {
@@ -1515,6 +1516,7 @@ void rv_generator_st::fix_jumps() {
         if (is_jump(instructions[i])) {
             instr_sizes[i] = 2;
         } else if (instructions[i] == 0) {
+            /* Filter out any leftover null instructions */
             instr_sizes[i] = 0;
         } else {
             instr_sizes[i] = 1;

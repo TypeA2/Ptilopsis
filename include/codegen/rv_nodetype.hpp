@@ -670,13 +670,13 @@ constexpr auto generate_instr_table() {
     res[id_expr]     = { all_types(0b0000000'00000'01000'000'00000'0010011), no_instr, no_instr, no_instr };
     res[while_dummy] = { no_instr, no_instr, no_instr, no_instr };
     res[func_decl_dummy] = {
-        /* sw x1, -4(x2) */
+        /* Store return address: sw ra, -4(sp) */
         all_types(0b1111111'00001'00010'010'11100'0100011),
-        /* sw x8, -8(x2) */
+        /* Store frame pointer: sw s0, -8(sp) */
         all_types(0b1111111'01000'00010'010'11000'0100011),
-        /* sub x2, x2, x8 */
+        /* s0 was loaded with the stack size, so move sp down: sub sp, sp, s0 */
         all_types(0b0100000'01000'00010'000'00010'0110011),
-        /* add x8, x8, x2 */
+        /* s0 should be start of the stack, so sp + stacksize: add s0, s0, sp */
         all_types(0b0000000'00010'01000'000'01000'0110011)
     };
     res[return_statement] = { 
@@ -689,16 +689,16 @@ constexpr auto generate_instr_table() {
     };
 
     res[func_decl] = {
-        /* add sp, sp, x8 */
+        /* s0 = stacksize, move sp back add sp, sp, s0 */
         all_types(0b0000000'01000'00010'000'00010'0110011),
 
-        /* lw ra, -4(sp) */
+        /* Restore return address: lw ra, -4(sp) */
         all_types(0b1111111'11100'00010'010'00001'0000011),
 
-        /* lw s0, -8(s0) */
+        /* Return s0 (s0 = sp here): lw s0, -8(s0) */
         all_types(0b1111111'11000'01000'010'01000'0000011),
 
-        /* jalr x0, x1, 0 */
+        /* Jump to return address: jalr zero, ra, 0 */
         all_types(0b0000000'00000'00001'000'00000'1100111)
     };
     res[func_arg_list] = { no_instr, no_instr, no_instr, no_instr };
