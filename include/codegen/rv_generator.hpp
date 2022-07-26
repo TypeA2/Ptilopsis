@@ -67,6 +67,8 @@ class rv_generator {
     virtual void process() = 0;
 
     std::ostream& print(std::ostream& os) const;
+    std::ostream& to_binary(std::ostream& os) const;
+    std::ostream& to_asm(std::ostream& os) const;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const rv_generator& gen) {
@@ -84,12 +86,12 @@ class rv_generator_st : public rv_generator {
     private:
     void dump_instrs();
 
-    void preprocess();
-    void isn_cnt();
-    void isn_gen();
-    void optimize();
-    void regalloc();
-    void fix_func_tab(std::span<int64_t> instr_offsets);
-    void fix_jumps();
-    void postprocess();
+    virtual void preprocess();
+    virtual void isn_cnt();
+    virtual void isn_gen();
+    virtual void optimize();
+    virtual void regalloc();
+    virtual void fix_func_tab(std::span<int64_t> instr_offsets);
+    virtual void fix_jumps();
+    virtual void postprocess();
 };

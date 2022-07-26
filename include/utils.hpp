@@ -2,14 +2,6 @@
 
 #include <type_traits>
 
-namespace ptilopsis {
-    template <typename E>
-    constexpr auto to_integral(E e) {
-        return static_cast<std::underlying_type_t<E>>(e);
-    }
-
-}
-
 inline std::ostream& operator<<(std::ostream& os, std::chrono::nanoseconds ns) {
     auto count = static_cast<long double>(ns.count());
     if (count < 1'000) {

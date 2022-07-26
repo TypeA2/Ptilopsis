@@ -9,4 +9,7 @@ build*/
 subprojects/packagecache/
 subprojects/fmt-*
 subprojects/magic_enum/
+subprojects/cxxopts-*
 *.pdf
+*.s
+*.out

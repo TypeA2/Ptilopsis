@@ -42,6 +42,9 @@
     <ClInclude Include="include\disassembler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\codegen\rv_generator_avx.hpp">
+      <Filter>Header Files\codegen</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\codegen\rv_generator.cpp">
@@ -52,6 +55,9 @@
     </ClCompile>
     <ClCompile Include="src\disassembler.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\codegen\rv_generator_avx.cpp">
+      <Filter>Source Files\codegen</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

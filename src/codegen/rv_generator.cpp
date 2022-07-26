@@ -105,6 +105,18 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     return os;
 }
 
+std::ostream& rv_generator::to_binary(std::ostream& os) const {
+    return os.write(reinterpret_cast<const char*>(instructions.data()), instructions.size() * 4);
+}
+
+std::ostream& rv_generator::to_asm(std::ostream& os) const {
+    for (uint32_t instr : instructions) {
+        os << rvdisasm::instruction(instr) << '\n';
+    }
+
+    return os;
+}
+
 void rv_generator_st::process() {
     preprocess();
     isn_cnt();
