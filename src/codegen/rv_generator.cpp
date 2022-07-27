@@ -42,7 +42,7 @@ rv_generator::rv_generator(const DepthTree& tree)
     : nodes          { tree.filledNodes() }
     , max_depth      { tree.maxDepth()    }
     , node_types     { nodes }
-    , result_types   { nodes}
+    , result_types   { nodes }
     , parents        { nodes }
     , depth          { nodes }
     , child_idx      { nodes }
@@ -55,7 +55,7 @@ rv_generator::rv_generator(const DepthTree& tree)
     });
 
     std::ranges::transform(tree.getResultingTypes(), result_types.begin(), [](uint8_t v) {
-        return static_cast<DataType>(v);
+        return static_cast<rv_data_type>(v);
     });
 
     std::copy_n(tree.getParents().begin(),  nodes, parents.begin());
@@ -236,7 +236,7 @@ void rv_generator_st::preprocess() {
 
                 if (ir_idx < 8) {
                     /* Same register is used for integers and float-in-int-register */
-                    node_data[i] = ir_idx + 10;
+                    node_data[i] = ir_idx;
 
                     /* This argument is placed in an integer register */
                     if ((result_types[i] & 0b001) && (result_types[i] & 0b110)) {
@@ -263,8 +263,8 @@ void rv_generator_st::preprocess() {
         /* If the parent of this node is a comparison operator and this node is a float */
         if (parents[i] >= 0
             && (node_types[parents[i]] & eq_expr) == eq_expr
-            && result_types[i] == DataType::FLOAT) {
-            result_types[parents[i]] = DataType::FLOAT;
+            && result_types[i] == rv_data_type::FLOAT) {
+            result_types[parents[i]] = rv_data_type::FLOAT;
         }
     }
 }
@@ -411,7 +411,7 @@ void rv_generator_st::isn_gen() {
     size_t word_count = node_locations.back();
 
     // TODO Use i.e. radix sort for parallel sorting
-    avx_buffer<uint32_t> idx_array { std::views::iota(uint32_t { 0 }, nodes) };
+    avx_buffer<uint32_t> idx_array = avx_buffer<uint32_t>::iota(nodes);
 
     /* Sort in separate array to obtain a mapping to the original */
     std::ranges::sort(idx_array, std::ranges::less{}, [this](uint32_t i) {
@@ -590,7 +590,7 @@ void rv_generator_st::isn_gen() {
                     uint32_t instr_in_buf = node_locations[idx] + i;
                     auto node_type = node_types[idx];
                     auto data_type = result_types[idx];
-                    auto get_output_register = [this, idx, i, get_parent_arg_idx](rv_node_type node_type, DataType resulting_type, uint32_t instr_in_buf) -> int64_t {
+                    auto get_output_register = [this, idx, i, get_parent_arg_idx](rv_node_type node_type, rv_data_type resulting_type, uint32_t instr_in_buf) -> int64_t {
                         // TODO enum
 
                         /* The type of calculation required to get the output register */

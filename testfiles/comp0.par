@@ -1,7 +1,3 @@
-fn empty[]: void {
-    
-}
-
 fn comp[]: int {
     if 8 == 43 {
         return 42;

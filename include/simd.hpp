@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ostream>
+
 #include <immintrin.h>
 
 #ifdef _MSC_VER
@@ -11,6 +13,90 @@
 /* Align for potential AVX-512 usage */
 #define AVX_ALIGNMENT 64
 #define AVX_ALIGNED alignas(64)
+
+/* Pretty-printing */
+template <size_t bits>
+concept integer_size = (bits == 64) || (bits == 32) || (bits == 16) || (bits == 8);
+
+template <size_t bits, bool is_signed> requires integer_size<bits>
+struct avx_formatter {
+    __m256i reg;
+};
+
+template <size_t bits, bool is_signed> requires integer_size<bits>
+std::ostream& operator<<(std::ostream& os, const avx_formatter<bits, is_signed>& reg) {
+    os << '[';
+    switch (bits) {
+        case 64:
+            if constexpr (is_signed) {
+                for (size_t i = 0; i < 3; ++i) {
+                    os << reg.reg.m256i_i64[i] << ", ";
+                }
+                os << reg.reg.m256i_i64[3];
+            } else {
+                for (size_t i = 0; i < 3; ++i) {
+                    os << reg.reg.m256i_u64[i] << ", ";
+                }
+                os << reg.reg.m256i_u64[3];
+            }
+            break;
+
+        case 32:
+            if constexpr (is_signed) {
+                for (size_t i = 0; i < 7; ++i) {
+                    os << reg.reg.m256i_i32[i] << ", ";
+                }
+                os << reg.reg.m256i_i32[7];
+            } else {
+                for (size_t i = 0; i < 7; ++i) {
+                    os << reg.reg.m256i_u32[i] << ", ";
+                }
+                os << reg.reg.m256i_u32[7];
+            }
+            break;
+
+        case 16:
+            if constexpr (is_signed) {
+                for (size_t i = 0; i < 15; ++i) {
+                    os << reg.reg.m256i_i16[i] << ", ";
+                }
+                os << reg.reg.m256i_i16[15];
+            } else {
+                for (size_t i = 0; i < 15; ++i) {
+                    os << reg.reg.m256i_u16[i] << ", ";
+                }
+                os << reg.reg.m256i_u16[15];
+            }
+            break;
+
+        case 8:
+            if constexpr (is_signed) {
+                for (size_t i = 0; i < 31; ++i) {
+                    os << static_cast<int>(reg.reg.m256i_i8[i]) << ", ";
+                }
+                os << static_cast<int>(reg.reg.m256i_i8[31]);
+            } else {
+                for (size_t i = 0; i < 31; ++i) {
+                    os << static_cast<int>(reg.reg.m256i_u8[i]) << ", ";
+                }
+                os << static_cast<int>(reg.reg.m256i_u8[31]);
+            }
+            break;
+    }
+
+    os << ']';
+    return os;
+}
+
+template <size_t bits = 32, bool is_signed = false>
+std::ostream& print(std::ostream& os, __m256i reg) {
+    os << avx_formatter<bits, is_signed>{ .reg = reg };
+}
+
+template <size_t bits = 32, bool is_signed = false>
+auto format(__m256i reg) {
+    return avx_formatter<bits, is_signed>{.reg = reg };
+}
 
 /* _mm256_slli_si256 operates on 2 128-bit lanes. This emulates a full-width
  * 256-bit left-shift, as per: https://stackoverflow.com/a/25264853/8662472

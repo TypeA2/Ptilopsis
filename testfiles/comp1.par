@@ -1,40 +1,12 @@
-fn i_and_i[foo: int, bar: int]: int {
-    if foo > bar {
+fn comp[x: int, y: int]: int {
+    if x == y {
         return 42;
     } else {
-        return -12;
-    }
-}
-
-
-fn f_and_f[foo: float, bar: float]: float {
-    if foo > bar {
-        return 0.42;
-    } else {
-        return -0.12;
-    }
-}
-
-fn f_and_i[foo: float, bar:int]: float {
-    if foo > float(bar) {
-        return 0.42;
-    } else {
-        return float(-12);
-    }
-}
-
-fn i_and_f[foo: int, bar: float]: float {
-    if float(foo) > bar {
-        return float(42);
-    } else {
-        return -0.12;
+        return 12;
     }
 }
 
 fn main[]: int {
-    i_and_i[1, 2];
-    f_and_f[0.1, 0.2];
-    f_and_i[0.1, 2];
-    i_and_f[1, 0.2];
-    return 0;
+    var x = comp[8, 43];
+    return x;
 }

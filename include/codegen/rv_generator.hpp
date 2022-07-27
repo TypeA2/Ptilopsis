@@ -22,7 +22,7 @@ class rv_generator {
     size_t max_depth;
 
     avx_buffer<rv_node_type> node_types;
-    avx_buffer<DataType> result_types;
+    avx_buffer<rv_data_type> result_types;
     avx_buffer<int32_t> parents;
     avx_buffer<int32_t> depth;
     avx_buffer<int32_t> child_idx;

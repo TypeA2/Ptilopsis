@@ -10,7 +10,7 @@
 /* Separate node type definitions because
  * at this point they're not typechecked anymore
  */
-enum class rv_node_type : uint8_t {
+enum class rv_node_type : uint32_t {
     invalid,
     statement_list,
     empty,
@@ -83,13 +83,25 @@ enum class rv_node_type : uint8_t {
     func_call_arg              = 0b11110100,
     func_call_arg_float_as_int = 0b11110101,
     func_call_arg_on_stack     = 0b11110110,
-    
 };
 
-using rv_node_type_t = std::underlying_type_t<rv_node_type>;
-using data_type_t = std::underlying_type_t<DataType>;
+enum class rv_data_type : uint32_t {
+    INVALID   /* = 0b000 */,
+    VOID      /* = 0b001 */,
+    INT       /* = 0b010 */,
+    FLOAT     /* = 0b011 */,
+    INT_REF   /* = 0b100 */,
+    FLOAT_REF /* = 0b101 */
+};
 
-constexpr size_t max_node_types = 1 << (sizeof(rv_node_type_t) * std::numeric_limits<rv_node_type_t>::digits);
+inline std::ostream& operator<<(std::ostream& os, rv_data_type res) {
+    return (os << static_cast<DataType>(res));
+}
+
+using rv_node_type_t = std::underlying_type_t<rv_node_type>;
+using data_type_t = std::underlying_type_t<rv_data_type>;
+
+constexpr size_t max_node_types = 256;
 
 constexpr size_t parent_idx_per_node = 3;
 
@@ -151,7 +163,7 @@ constexpr bool operator==(rv_node_type lhs, rv_node_type_t rhs) {
     return static_cast<rv_node_type_t>(lhs) == rhs;
 }
 
-constexpr data_type_t operator&(DataType lhs, data_type_t rhs) {
+constexpr data_type_t operator&(rv_data_type lhs, data_type_t rhs) {
     return static_cast<data_type_t>(lhs) & rhs;
 }
 
@@ -176,7 +188,7 @@ class mapping_helper {
 };
 
 template <typename T>
-using ArrayForTypes = std::array<T, magic_enum::enum_count<DataType>()>;
+using ArrayForTypes = std::array<T, magic_enum::enum_count<rv_data_type>()>;
 
 /* Similar to NODE_COUNT_TABLE in Pareas */
 constexpr auto generate_size_mapping() {
@@ -949,9 +961,9 @@ constexpr auto generate_operand_table() {
     res[func_call_expression] = { zero, zero, zero, zero };
     res[func_call_arg_list]   = { zero, zero, zero, zero };
 
-    res[if_statement]      = { make({1,0}, {1,0}, {1,0}, {1,0}, {1,2}, {1,3}), zero, zero, zero };
-    res[while_statement]   = { make({4,0}, {4,0}, {4,0}, {4,0}, {4,0}, {4,0}), zero, zero, zero};
-    res[if_else_statement] = { make({1,0}, {1,0}, {1,0}, {1,0}, {1,0}, {1,0}), zero, zero, zero};
+    res[if_statement]      = { make_all({1,0}), zero, zero, zero };
+    res[while_statement]   = { make_all({4,0}), zero, zero, zero};
+    res[if_else_statement] = { make_all({1,0}), zero, zero, zero};
 
     res[eq_expr]  = { make_all({1,1}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
     res[neq_expr] = { make_all({1,1}), make({0,0}, {0,0}, {0,7}, {7,0}, {0,0}, {0,0}), zero, zero };
@@ -960,7 +972,7 @@ constexpr auto generate_operand_table() {
     res[lte_expr] = { make({0,0}, {0,0}, {5,5}, {1,1}, {0,0}, {0,0}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
     res[gte_expr] = { make({0,0}, {0,0}, {1,1}, {5,5}, {0,0}, {0,0}), make({0,0}, {0,0}, {7,0}, {0,0}, {0,0}, {0,0}), zero, zero };
 
-    res[func_arg]                   = { zero, zero, zero, zero };
+    res[func_arg]                   = { make({1,0}, {1,0}, {1,0}, {1,0}, {1,2}, {1,3}), zero, zero, zero};
     res[func_arg_float_as_int]      = { make_all({1,2}), zero, zero, zero };
     res[func_arg_on_stack]          = { zero, make_all({1,7}), zero, zero };
     res[func_call_arg]              = { make({1,0}, {1,0}, {1,0}, {1,6}, {1,0}, {1,0}), zero, zero, zero };

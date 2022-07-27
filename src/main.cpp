@@ -24,6 +24,7 @@ int main(int argc, char** argv) {
     std::string outfile;
     bool output_asm = false;
     bool debug = false;
+    bool simple = false;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -31,7 +32,8 @@ int main(int argc, char** argv) {
         ("o", "output filename (default: ./c.out, - for stdout)", cxxopts::value<std::string>(), "<outfile>")
         ("infile", "Input filename, - for s tdin", cxxopts::value<std::string>())
         ("h,help", "Print usage")
-        ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"));
+        ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"))
+        ("s,simple", "Use simple compiler instead of AVX compiler", cxxopts::value<bool>()->default_value("false"));
 
     options.parse_positional("infile");
     options.custom_help("<input> [-S] [-o <outfile>]");
@@ -55,6 +57,7 @@ int main(int argc, char** argv) {
         }
 
         debug = res["debug"].as<bool>();
+        simple = res["simple"].as<bool>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -97,23 +100,29 @@ int main(int argc, char** argv) {
         /* Convert to an inverted tree */
         DepthTree depth_tree(node.get());
         
-        rv_generator_st gen{ depth_tree };
+        std::unique_ptr<rv_generator> gen;
+
+        if (simple) {
+            gen = std::make_unique<rv_generator_st>(depth_tree);
+        } else {
+            gen = std::make_unique<rv_generator_avx>(depth_tree);
+        }
 
         if (debug) {
             node->print(std::cout);
         }
 
-        gen.process();
+        gen->process();
 
         if (debug) {
-            gen.print(std::cout);
+            gen->print(std::cout);
         }
 
         if (outfile == "-") {
             if (output_asm) {
-                gen.to_asm(std::cout);
+                gen->to_asm(std::cout);
             } else {
-                gen.to_binary(std::cout);
+                gen->to_binary(std::cout);
             }
         } else {
             std::ofstream output(outfile, std::ios::binary);
@@ -123,9 +132,9 @@ int main(int argc, char** argv) {
             }
 
             if (output_asm) {
-                gen.to_asm(output);
+                gen->to_asm(output);
             } else {
-                gen.to_binary(output);
+                gen->to_binary(output);
             }
         }
         

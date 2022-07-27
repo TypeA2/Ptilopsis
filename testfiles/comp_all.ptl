@@ -1,0 +1,40 @@
+function i_and_i(foo:int, bar:int) : int {
+    if (foo > bar) {
+        return 42;
+    } else {
+        return -12;
+    }
+}
+
+function f_and_f(foo:float, bar:float) : float {
+    if (foo > bar) {
+        return 0.42;
+    } else {
+        return -0.12;
+    }
+}
+
+function f_and_i(foo:float, bar:int) : float {
+    if (foo > bar@float) {
+        return 0.42;
+    } else {
+        return -12;
+    }
+}
+
+function i_and_f(foo:int, bar:float) : float {
+    if (foo@float > bar) {
+        return 42;
+    } else {
+        return -0.12;
+    }
+}
+
+function main() : int {
+    i_and_i(1, 2);
+    f_and_f(0.1, 0.2);
+    f_and_i(0.1, 2);
+    i_and_f(1, 0.2);
+    return 0;
+}
+

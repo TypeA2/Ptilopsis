@@ -42,7 +42,7 @@ class avx_buffer {
     void _resize(size_type new_count) {
         clear();
         _count = new_count;
-        _ptr = static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t { AVX_ALIGNMENT }));
+        _ptr = static_cast<T*>(operator new[](((sizeof(T)* _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT, std::align_val_t { AVX_ALIGNMENT }));
     }
 
     public:
@@ -52,7 +52,7 @@ class avx_buffer {
     constexpr avx_buffer() : _ptr { nullptr } { }
     constexpr explicit avx_buffer(size_t count)
         : _count { count }
-        , _ptr { static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t{ AVX_ALIGNMENT })) } { }
+        , _ptr { static_cast<T*>(operator new[](((sizeof(T)* _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT, std::align_val_t{ AVX_ALIGNMENT })) } { }
 
     template <std::ranges::sized_range R>
     constexpr explicit avx_buffer(R&& range) : avx_buffer { std::ranges::size(range) } {  // NOLINT(bugprone-forwarding-reference-overload)
@@ -147,6 +147,14 @@ class avx_buffer {
 
     [[nodiscard]] constexpr const T* data() const {
         return _ptr;
+    }
+
+    [[nodiscard]] constexpr __m256i* m256i() {
+        return reinterpret_cast<__m256i*>(_ptr);
+    }
+
+    [[nodiscard]] constexpr const __m256i* m256i() const {
+        return reinterpret_cast<const __m256i*>(_ptr);
     }
 
     [[nodiscard]] constexpr T& operator[](size_type i) {
