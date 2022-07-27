@@ -156,8 +156,10 @@ void rv_generator_st::process() {
         return ss.str();
     };
 
+    std::string total_str = to_time_str(total);
+
     std::vector<std::string> time_strings = durations | std::views::transform(&pair_type::second) | std::views::transform(to_time_str) | ranges::to_vector;
-    size_t time_length = 1 + std::ranges::max(time_strings | std::views::transform(&std::string::size));
+    size_t time_length = 1 + std::max<size_t>(total_str.size(), std::ranges::max(time_strings | std::views::transform(&std::string::size)));
 
     auto to_percent_str = [total](std::chrono::nanoseconds ns) {
         std::stringstream ss;
@@ -178,6 +180,11 @@ void rv_generator_st::process() {
                                       << std::setw(percent_length) << std::setfill(' ') << std::right << percent
             << rvdisasm::color::white << '\n';
     }
+
+    std::cerr << std::string(name_length + time_length + 12, '-') << '\n'
+        << rvdisasm::color::instr << std::setw(name_length) << std::setfill(' ') << std::left << "Total"
+        << rvdisasm::color::extra << std::setw(time_length) << std::setfill(' ') << std::right << total_str
+        << rvdisasm::color::white << '\n';
 }
 
 void rv_generator_st::dump_instrs() {
@@ -216,7 +223,7 @@ void rv_generator_st::preprocess() {
                  */
 
                 /* Adjust node data to represent actual register index */
-                node_data[i] += 10;
+                //node_data[i] += 10;
 
             } else {
                 /* Index of the integer register in which to place this argument */

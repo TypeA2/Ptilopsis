@@ -807,7 +807,7 @@ constexpr auto generate_instr_table() {
 
     res[func_arg] = {
         /* sw x0, 0(x0) */
-        ArrayForTypes<uint32_t> { err, err, err, err, 0b0000000'00000'00000'010'00000'0100011, 0b0000000'00000'00000'010'00000'0100011 }, no_instr, no_instr, no_instr
+        ArrayForTypes<uint32_t> { err, err, err, err, 0b0000000'00000'00000'010'00000'0100011, 0b0000000'00000'00000'010'00000'0100111 }, no_instr, no_instr, no_instr
     };
 
     /* fmv.x.w */
@@ -821,7 +821,7 @@ constexpr auto generate_instr_table() {
         ArrayForTypes<uint32_t> {
             err, err,
             /* store argument in register */
-            0b0000000'00000'00000'000'00000'0110011, 0b0010000'000000'00000'000'00000'1010011,
+            0b0000000'00000'00000'000'00000'0110011, 0b0010000'00000'00000'000'00000'1010011,
             err, err
         }, no_instr, no_instr, no_instr
     };

@@ -35,6 +35,26 @@ std::ostream& operator<<(std::ostream& os, std::optional<rvdisasm::rv_register> 
     return reg.has_value() ? (os << reg.value()) : os;
 }
 
+std::ostream& operator<<(std::ostream& os, rvdisasm::rvf_register reg) {
+    extern bool g_color_regs;
+
+    static constexpr std::array<std::string_view, magic_enum::enum_count<rvdisasm::rvf_register>()> abi_names {
+        "ft0", "ft1", "ft2", "ft3", "ft4", "ft5", "ft6", "ft7",
+        "fs0", "fs1",
+        "fa0", "fa1", "fa2", "fa3", "fa4", "fa5", "fa6", "fa7",
+        "fs2", "fs3", "fs4", "fs5", "fs6", "fs7", "fs8", "fs9", "fs10", "fs11",
+        "ft8", "ft9", "ft10", "ft11"
+    };
+
+    os << (g_color_regs ? rvdisasm::color::reg : "") << abi_names[magic_enum::enum_integer(reg)] << (g_color_regs ? rvdisasm::color::white : "");
+
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, std::optional<rvdisasm::rvf_register> reg) {
+    return reg.has_value() ? (os << reg.value()) : os;
+}
+
 [[nodiscard]] rvdisasm::instruction_type instr_type(uint32_t instr) {
     using enum rvdisasm::instruction_type;
     uint8_t opcode = instr & 0b1111111;
@@ -216,6 +236,10 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
     bool old_color_regs = g_color_regs;
     g_color_regs = color;
 
+    uint32_t opcode = instr & 0b1111111;
+    uint8_t funct3 = (instr >> 12) & 0b111;
+    uint8_t funct7 = (instr >> 25) & 0b1111111;
+
     os << std::dec;
     auto type = instr_type(instr);
 
@@ -226,11 +250,52 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
 
     switch (type) {
         case instruction_type::r: {
-            auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
-            auto rs1 = magic_enum::enum_cast<rv_register>((instr >> 15) & 0b11111);
-            auto rs2 = magic_enum::enum_cast<rv_register>((instr >> 20) & 0b11111);
+            if (opcode == 0b1010011 || opcode == 0b0000111 || opcode == 0100111) {
+                if (opcode == 0b1010011) {
+                    switch (funct7) {
+                        case 0b1111000:
+                        case 0b1101000: {
+                            auto rd = magic_enum::enum_cast<rvf_register>((instr >> 7) & 0b11111);
+                            auto rs1 = magic_enum::enum_cast<rv_register>((instr >> 15) & 0b11111);
+                            os << rd << ", " << rs1;
+                            break;
+                        }
 
-            os << rd << ", " << rs1 << ", " << rs2;
+                        case 0b1100000: {
+                            auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
+                            auto rs1 = magic_enum::enum_cast<rvf_register>((instr >> 15) & 0b11111);
+                            os << rd << ", " << rs1;
+                            break;
+                        }
+
+                        case 0b1110000: {
+                            if (funct3 == 0) {
+                                auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
+                                auto rs1 = magic_enum::enum_cast<rvf_register>((instr >> 15) & 0b11111);
+                                os << rd << ", " << rs1;
+                                break;
+                            }
+
+                            [[fallthrough]];
+                        }
+
+                        default: {
+                            auto rd = magic_enum::enum_cast<rvf_register>((instr >> 7) & 0b11111);
+                            auto rs1 = magic_enum::enum_cast<rvf_register>((instr >> 15) & 0b11111);
+                            auto rs2 = magic_enum::enum_cast<rvf_register>((instr >> 20) & 0b11111);
+
+                            os << rd << ", " << rs1 << ", " << rs2;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
+                auto rs1 = magic_enum::enum_cast<rv_register>((instr >> 15) & 0b11111);
+                auto rs2 = magic_enum::enum_cast<rv_register>((instr >> 20) & 0b11111);
+
+                os << rd << ", " << rs1 << ", " << rs2;
+            }
             break;
         }
         case instruction_type::i: {
@@ -244,10 +309,16 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
             auto imm_signed = static_cast<int32_t>(imm);
 
             switch (instr & 0b1111111) {
-                case 0b0000011:
                 case 0b0000111:
+                case 0b0000011:
                 case 0b1100111:
-                    os << rd << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
+                    if (opcode == 0b0000111) {
+                        os << magic_enum::enum_cast<rvf_register>((instr >> 7) & 0b11111);
+                    } else {
+                        os << rd;
+                    }
+
+                    os << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
                     break;
 
                 default:
@@ -266,7 +337,14 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
             }
 
             auto imm_signed = static_cast<int32_t>(imm);
-            os << rs2 << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
+            if (opcode == 0b0100111) {
+                os << magic_enum::enum_cast<rvf_register>((instr >> 15) & 0b11111);
+            } else {
+                os << rs2;
+            }
+            
+            os << ", " << color_imm << imm_signed << color_white << "(" << rs1 << ")";
+            
             break;
         }
         case instruction_type::b: {
@@ -304,12 +382,21 @@ std::ostream& format_args(std::ostream& os, uint32_t instr, bool color, uint64_t
             break;
         }
         case instruction_type::r4: {
-            auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
-            auto rs1 = magic_enum::enum_cast<rv_register>((instr >> 15) & 0b11111);
-            auto rs2 = magic_enum::enum_cast<rv_register>((instr >> 20) & 0b11111);
-            auto rs3 = magic_enum::enum_cast<rv_register>((instr >> 27) & 0b11111);
+            if (opcode == 0b1010011 || opcode == 0b0000111 || opcode == 0100111) {
+                auto rd = magic_enum::enum_cast<rvf_register>((instr >> 7) & 0b11111);
+                auto rs1 = magic_enum::enum_cast<rvf_register>((instr >> 15) & 0b11111);
+                auto rs2 = magic_enum::enum_cast<rvf_register>((instr >> 20) & 0b11111);
+                auto rs3 = magic_enum::enum_cast<rvf_register>((instr >> 27) & 0b11111);
 
-            os << rd << ", " << rs1 << ", " << rs2 << ", " << rs3;
+                os << rd << ", " << rs1 << ", " << rs2 << ", " << rs3;
+            } else {
+                auto rd = magic_enum::enum_cast<rv_register>((instr >> 7) & 0b11111);
+                auto rs1 = magic_enum::enum_cast<rv_register>((instr >> 15) & 0b11111);
+                auto rs2 = magic_enum::enum_cast<rv_register>((instr >> 20) & 0b11111);
+                auto rs3 = magic_enum::enum_cast<rv_register>((instr >> 27) & 0b11111);
+
+                os << rd << ", " << rs1 << ", " << rs2 << ", " << rs3;
+            }
             break;
         }
         default:

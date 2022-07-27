@@ -1,4 +1,9 @@
-function comp(x: int, y: int) : int {
+function empty(x: float) : void {
+
+}
+
+function comp(x: int, y: int, z: float) : int {
+    empty(z);
     if (x == y) {
         return 42;
     } else {
@@ -7,6 +12,6 @@ function comp(x: int, y: int) : int {
 }
 
 function main() : int {
-    x:int = comp(8, 43);
+    x:int = comp(8, 43, 8.3);
     return x;
 }
