@@ -173,10 +173,10 @@ void rv_generator_st::process() {
 
     for (const auto& [pair, time, percent] : ranges::views::zip(durations, time_strings, percent_strings)) {
         std::cerr
-            << std::setw(name_length)    << std::setfill(' ') << std::left  << pair.first
-            << std::setw(time_length)    << std::setfill(' ') << std::right << time
-            << std::setw(percent_length) << std::setfill(' ') << std::right << percent
-            << '\n';
+            << rvdisasm::color::instr << std::setw(name_length)    << std::setfill(' ') << std::left  << pair.first
+            << rvdisasm::color::extra << std::setw(time_length)    << std::setfill(' ') << std::right << time
+                                      << std::setw(percent_length) << std::setfill(' ') << std::right << percent
+            << rvdisasm::color::white << '\n';
     }
 }
 
