@@ -8,6 +8,12 @@
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
+#include <range/v3/view/zip.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/algorithm/max.hpp>
+#include <range/v3/range/conversion.hpp>
+
 #include <codegen/depthtree.hpp>
 
 #include <iomanip>
@@ -17,6 +23,8 @@
 #include <numeric>
 #include <bit>
 #include <bitset>
+#include <sstream>
+#include <vector>
 
 #include <cmath>
 
@@ -118,13 +126,58 @@ std::ostream& rv_generator::to_asm(std::ostream& os) const {
 }
 
 void rv_generator_st::process() {
-    preprocess();
-    isn_cnt();
-    isn_gen();
-    optimize();
-    regalloc();
-    fix_jumps();
-    postprocess();
+    std::vector<std::pair<std::string_view, std::chrono::nanoseconds>> durations;
+    using pair_type = decltype(durations)::value_type;
+    durations.reserve(7);
+
+    auto time = [this, &durations](std::string_view name, void(rv_generator_st::* func)()) {
+        auto begin = std::chrono::steady_clock::now();
+        (this->*func)();
+        auto end = std::chrono::steady_clock::now();
+
+        durations.emplace_back(name, end - begin);
+    };
+
+    time("preprocess", &rv_generator_st::preprocess);
+    time("isn_cnt", &rv_generator_st::isn_cnt);
+    time("isn_gen", &rv_generator_st::isn_gen);
+    time("optimize", &rv_generator_st::optimize);
+    time("regalloc", &rv_generator_st::regalloc);
+    time("fix_jumps", &rv_generator_st::fix_jumps);
+    time("postprocess", &rv_generator_st::postprocess);
+
+    std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});
+
+    size_t name_length = 1 + std::ranges::max(durations | std::views::transform(&pair_type::first) | std::views::transform(&std::string_view::size));
+
+    auto to_time_str = [](std::chrono::nanoseconds ns) {
+        std::stringstream ss;
+        ss << ns;
+        return ss.str();
+    };
+
+    std::vector<std::string> time_strings = durations | std::views::transform(&pair_type::second) | std::views::transform(to_time_str) | ranges::to_vector;
+    size_t time_length = 1 + std::ranges::max(time_strings | std::views::transform(&std::string::size));
+
+    auto to_percent_str = [total](std::chrono::nanoseconds ns) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2) << ((ns.count() * 100.) / total.count()) << '%';
+        return ss.str();
+    };
+
+    std::vector<std::string> percent_strings = durations | std::views::transform(&pair_type::second) | std::views::transform(to_percent_str) | ranges::to_vector;
+    size_t percent_length = std::max(size_t { 12 }, 1 + std::ranges::max(percent_strings | std::views::transform(&std::string::size)));
+
+    std::cerr << std::setw(name_length) << std::setfill(' ') << std::left << "Stage" << ' ' << std::setw(time_length) << std::setfill(' ') << "Duration" << " % of total\n"
+        << std::string(name_length + time_length + 12, '-') << '\n';
+
+    for (const auto& [pair, time, percent] : ranges::views::zip(durations, time_strings, percent_strings)) {
+        std::cerr
+            << std::setw(name_length)    << std::setfill(' ') << std::left  << pair.first
+            << std::setw(time_length)    << std::setfill(' ') << std::right << time
+            << std::setw(percent_length) << std::setfill(' ') << std::right << percent
+            << '\n';
+    }
 }
 
 void rv_generator_st::dump_instrs() {

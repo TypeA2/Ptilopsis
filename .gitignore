@@ -10,6 +10,7 @@ subprojects/packagecache/
 subprojects/fmt-*
 subprojects/magic_enum/
 subprojects/cxxopts-*
+subprojects/range-v3-*
 *.pdf
 *.s
 *.out

@@ -20,20 +20,18 @@
 #include "utils.hpp"
 
 int main(int argc, char** argv) {
-   // if (argc < 2) {
-   //   std::cerr << "usage: " << argv[0] << " <input> [-S] [-o <outfile>]\n";
-   //   return EXIT_FAILURE;
-   // }
     std::string infile;
     std::string outfile;
     bool output_asm = false;
+    bool debug = false;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
         ("S", "Output assembly instead of machine code", cxxopts::value<bool>()->default_value("false"))
-        ("o", "output filename (default: ./c.out)", cxxopts::value<std::string>(), "<outfile>")
-        ("infile", "Input filename", cxxopts::value<std::string>())
-        ("h,help", "Print usage");
+        ("o", "output filename (default: ./c.out, - for stdout)", cxxopts::value<std::string>(), "<outfile>")
+        ("infile", "Input filename, - for s tdin", cxxopts::value<std::string>())
+        ("h,help", "Print usage")
+        ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"));
 
     options.parse_positional("infile");
     options.custom_help("<input> [-S] [-o <outfile>]");
@@ -55,6 +53,8 @@ int main(int argc, char** argv) {
         } else {
             outfile = res["o"].as<std::string>();
         }
+
+        debug = res["debug"].as<bool>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -63,21 +63,29 @@ int main(int argc, char** argv) {
     }
 
     try {
-        std::ifstream input(infile);
-        if(!input) {
-            std::cerr << "Failed to open file " << infile << std::endl;
-            return EXIT_FAILURE;
-        }
+        std::unique_ptr<std::istream> input;
+        std::unique_ptr<Lexer> lexer;
 
-        Lexer lexer(input);
+        if (infile == "-") {
+            lexer = std::make_unique<Lexer>(std::cin);
+        } else {
+            input = std::make_unique<std::ifstream>(infile);
+
+            if (!input->good()) {
+                std::cerr << "Failed to open file " << infile << '\n';
+                return EXIT_FAILURE;
+            }
+            lexer = std::make_unique<Lexer>(*input);
+        }
+        
         SymbolTable symtab;
-        Parser parser(lexer, symtab);
+        Parser parser(*lexer, symtab);
 
         std::unique_ptr<ASTNode> node(parser.parse());
         node->resolveType();
 
         /* We now have a pointer-linked AST. Show some properties. */
-        if (false) {
+        if (debug) {
             TreeProperties props(node.get());
             std::cout << "Number of nodes: " << props.getNodeCount() << std::endl;
             std::cout << "Tree width: " << props.getWidth() << std::endl;
@@ -91,22 +99,36 @@ int main(int argc, char** argv) {
         
         rv_generator_st gen{ depth_tree };
 
-        node->print(std::cout);
-
-        auto begin = std::chrono::steady_clock::now();
-        gen.process();
-        auto end = std::chrono::steady_clock::now();
-
-        gen.print(std::cout);
-
-        std::cout << "Processing done in " << (end - begin) << '\n';
-
-        std::ofstream output(outfile, std::ios::binary);
-        if (output_asm) {
-            gen.to_asm(output);
-        } else {
-            gen.to_binary(output);
+        if (debug) {
+            node->print(std::cout);
         }
+
+        gen.process();
+
+        if (debug) {
+            gen.print(std::cout);
+        }
+
+        if (outfile == "-") {
+            if (output_asm) {
+                gen.to_asm(std::cout);
+            } else {
+                gen.to_binary(std::cout);
+            }
+        } else {
+            std::ofstream output(outfile, std::ios::binary);
+            if (output.bad()) {
+                std::cout << "Failed to open output file: " << outfile << '\n';
+                return EXIT_FAILURE;
+            }
+
+            if (output_asm) {
+                gen.to_asm(output);
+            } else {
+                gen.to_binary(output);
+            }
+        }
+        
     }
     catch(const ParseException& e) {
         std::cerr << "Parse error: " << e.what() << std::endl;

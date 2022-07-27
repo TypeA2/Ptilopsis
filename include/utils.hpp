@@ -4,6 +4,8 @@
 
 inline std::ostream& operator<<(std::ostream& os, std::chrono::nanoseconds ns) {
     auto count = static_cast<long double>(ns.count());
+
+
     if (count < 1'000) {
         os << count << " ns";
     } else if (count < 1'000'000) {

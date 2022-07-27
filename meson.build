@@ -35,6 +35,7 @@ libpareas_ast_dep = subproject('pareas-ast', default_options: ['warning_level=0'
 fmt_header_only_dep = subproject('fmt', default_options: ['warning_level=0']).get_variable('fmt_header_only_dep')
 magic_enum_dep = subproject('magic_enum', default_options: ['warning_level=0']).get_variable('magic_enum_dep')
 cxxopts_dep = subproject('cxxopts', default_options: ['warning_level=0']).get_variable('cxxopts_dep')
+range_dep = subproject('range-v3', default_options: ['warning_level=0']).get_variable('range_dep')
 
 ptilopsis_sources = [
     'src/disassembler.cpp',
@@ -56,7 +57,7 @@ includes = [ include_directories('include') ]
 executable(
     'ptilopsis',
     ptilopsis_sources,
-    dependencies: [ threads_dep, libpareas_ast_dep, fmt_header_only_dep, magic_enum_dep, cxxopts_dep ],
+    dependencies: [ threads_dep, libpareas_ast_dep, fmt_header_only_dep, magic_enum_dep, cxxopts_dep, range_dep ],
     install: true,
     build_by_default: true,
     include_directories: includes
