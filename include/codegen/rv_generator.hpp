@@ -66,7 +66,7 @@ class rv_generator {
 
     virtual void process() = 0;
 
-    std::ostream& print(std::ostream& os) const;
+    std::ostream& print(std::ostream& os, bool disassemble = true) const;
     std::ostream& to_binary(std::ostream& os) const;
     std::ostream& to_asm(std::ostream& os) const;
 };

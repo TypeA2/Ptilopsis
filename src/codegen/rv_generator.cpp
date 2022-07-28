@@ -72,7 +72,7 @@ rv_generator::rv_generator(const DepthTree& tree)
     return static_cast<uint32_t>((signed_x << 20) >> 20);
 }
 
-std::ostream& rv_generator::print(std::ostream& os) const {
+std::ostream& rv_generator::print(std::ostream& os, bool disassemble) const {
     std::ios_base::fmtflags f { os.flags() };
     os << std::setfill(' ');
 
@@ -103,7 +103,7 @@ std::ostream& rv_generator::print(std::ostream& os) const {
     }
 #endif
 
-    if (instructions) {
+    if (disassemble && instructions) {
         std::vector<uint64_t> func_starts { this->func_starts.begin(), this->func_starts.end() };
         rvdisasm::disassemble(os, instructions, 0, func_starts);
     }
@@ -261,6 +261,24 @@ void rv_generator_st::preprocess() {
                     node_data[i] = (ir_idx - 8);
                 }
             }
+        }
+    }
+
+    /* replace_arg_lists */
+    for (size_t i = 0; i < nodes; ++i) {
+        if (i > 0 && node_types[i] == func_call_arg_list) {
+            size_t prev = i - 1;
+            int64_t stack_args = 0;
+            if (node_types[prev] == func_call_arg){
+                if (result_types[prev] == rv_data_type::FLOAT) {
+                    int64_t int_args = static_cast<int64_t>(child_idx[prev]) - node_data[prev];
+                    stack_args = std::max<int64_t>(int_args - 8, 0);
+                }
+            } else if (node_types[prev] == func_call_arg_on_stack) {
+                stack_args = node_data[prev] + 1;
+            }
+
+            node_data[i] = static_cast<uint32_t>(stack_args);
         }
     }
 

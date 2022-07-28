@@ -831,7 +831,7 @@ constexpr auto generate_instr_table() {
     /* sw, sw */
     res[func_call_arg_on_stack] = {
         /* sw, fsw relative to sp */
-        ArrayForTypes<uint32_t>{ err, err, 0b0000000'00000'00010'010'00000'0100011, 0b0000000'00000'00000'010'00010'0100111, err, err },
+        ArrayForTypes<uint32_t>{ err, err, 0b0000000'00000'00000'010'00010'0100011, 0b0000000'00000'00000'010'00010'0100111, err, err },
         no_instr, no_instr, no_instr
     };
 

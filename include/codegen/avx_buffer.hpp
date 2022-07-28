@@ -42,7 +42,18 @@ class avx_buffer {
     void _resize(size_type new_count) {
         clear();
         _count = new_count;
-        _ptr = static_cast<T*>(operator new[](((sizeof(T)* _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT, std::align_val_t { AVX_ALIGNMENT }));
+
+        /* Round up to power of 2: https://stackoverflow.com/a/9194117/8662472 */
+        size_t new_capacity = ((sizeof(T) * _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT;
+
+        /* Over-allocate by 1x the AVX alignment at both the start and the end */
+        char* raw_ptr = static_cast<char*>(operator new[](new_capacity + (2 * AVX_ALIGNMENT), std::align_val_t { AVX_ALIGNMENT }));
+
+        /* Zero-initialize everything so everything can be read */
+        std::fill_n(raw_ptr, new_capacity + (2 * AVX_ALIGNMENT), 0);
+
+        /* Keep a buffer the size of the AVX alignemtn before our start */
+        _ptr = reinterpret_cast<T*>(raw_ptr + AVX_ALIGNMENT);
     }
 
     public:
@@ -50,9 +61,7 @@ class avx_buffer {
     constexpr ~avx_buffer() { clear(); }
 
     constexpr avx_buffer() : _ptr { nullptr } { }
-    constexpr explicit avx_buffer(size_t count)
-        : _count { count }
-        , _ptr { static_cast<T*>(operator new[](((sizeof(T)* _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT, std::align_val_t{ AVX_ALIGNMENT })) } { }
+    constexpr explicit avx_buffer(size_t count) { _resize(count); }
 
     template <std::ranges::sized_range R>
     constexpr explicit avx_buffer(R&& range) : avx_buffer { std::ranges::size(range) } {  // NOLINT(bugprone-forwarding-reference-overload)
@@ -88,8 +97,7 @@ class avx_buffer {
     }
 
     constexpr avx_buffer& operator=(std::span<T> elements) {
-        clear();
-        _count = elements.size();
+        _resize(elements.size());
         std::ranges::copy(elements, _ptr);
 
         return *this;
@@ -100,10 +108,7 @@ class avx_buffer {
     }
 
     constexpr avx_buffer& operator=(const avx_buffer& other) {
-        clear();
-
-        _count = other._count;
-        _ptr = static_cast<T*>(operator new[](sizeof(T)* _count, std::align_val_t { AVX_ALIGNMENT }));
+        _resize(other._count);
         std::ranges::copy(other, _ptr);
 
         return *this;
@@ -155,6 +160,14 @@ class avx_buffer {
 
     [[nodiscard]] constexpr const __m256i* m256i() const {
         return reinterpret_cast<const __m256i*>(_ptr);
+    }
+
+    [[nodiscard]] constexpr __m256i* m256i(size_type i) {
+        return m256i() + i;
+    }
+
+    [[nodiscard]] constexpr const __m256i* m256i(size_type i) const {
+        return m256i() + i;
     }
 
     [[nodiscard]] constexpr T& operator[](size_type i) {
@@ -233,8 +246,11 @@ class avx_buffer {
     }
 
     constexpr void clear() {
-        operator delete[](_ptr, std::align_val_t {AVX_ALIGNMENT});
-        _ptr = nullptr;
+        if (_ptr) {
+            operator delete[](reinterpret_cast<char*>(_ptr) - AVX_ALIGNMENT, std::align_val_t { AVX_ALIGNMENT });
+            _ptr = nullptr;
+        }
+
         _count = 0;
     }
 };

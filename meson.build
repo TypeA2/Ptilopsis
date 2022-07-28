@@ -70,8 +70,9 @@ executable(
 #    include_directories: includes
 #)
 
-#executable(
-#    'test_shifts',
-#    [ 'benchmarks/test_shifts.cpp' ],
-#    include_directories: includes
-#)
+executable(
+    'test_shifts',
+    [ 'benchmarks/test_shifts.cpp' ],
+    dependencies: [ magic_enum_dep ],
+    include_directories: includes
+)

@@ -25,6 +25,7 @@ int main(int argc, char** argv) {
     bool output_asm = false;
     bool debug = false;
     bool simple = false;
+    bool tree = false;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -33,7 +34,8 @@ int main(int argc, char** argv) {
         ("infile", "Input filename, - for s tdin", cxxopts::value<std::string>())
         ("h,help", "Print usage")
         ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"))
-        ("s,simple", "Use simple compiler instead of AVX compiler", cxxopts::value<bool>()->default_value("false"));
+        ("s,simple", "Use simple compiler instead of AVX compiler", cxxopts::value<bool>()->default_value("false"))
+        ("t,tree", "Print tree info", cxxopts::value<bool>()->default_value("false"));
 
     options.parse_positional("infile");
     options.custom_help("<input> [-S] [-o <outfile>]");
@@ -58,6 +60,7 @@ int main(int argc, char** argv) {
 
         debug = res["debug"].as<bool>();
         simple = res["simple"].as<bool>();
+        tree = res["tree"].as<bool>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -108,14 +111,14 @@ int main(int argc, char** argv) {
             gen = std::make_unique<rv_generator_avx>(depth_tree);
         }
 
-        if (debug) {
+        if (debug || tree) {
             node->print(std::cout);
         }
 
         gen->process();
 
-        if (debug) {
-            gen->print(std::cout);
+        if (debug || tree) {
+            gen->print(std::cout, debug);
         }
 
         if (outfile == "-") {

@@ -1,8 +1,11 @@
 #pragma once
 
 #include <ostream>
+#include <concepts>
 
 #include <immintrin.h>
+
+#include <magic_enum.hpp>
 
 #ifdef _MSC_VER
 #   define FORCE_INLINE __forceinline
@@ -27,50 +30,149 @@ template <size_t bits, bool is_signed> requires integer_size<bits>
 std::ostream& operator<<(std::ostream& os, const avx_formatter<bits, is_signed>& reg) {
     os << '[';
 
-    auto printer = [&os](auto* ptr, size_t count, bool cast = false) {
-        if (cast) {
-            for (size_t i = 0; i < (count - 1); ++i) {
-                os << static_cast<int64_t>(ptr[i]) << ", ";
-            }
-            os << static_cast<int64_t>(ptr[count - 1]);
-        } else {
-            for (size_t i = 0; i < (count - 1); ++i) {
-                os << ptr[i] << ", ";
-            }
-            os << ptr[count - 1];
-        }
-    };
 
     switch (bits) {
         case 64:
             if constexpr (is_signed) {
-                printer(reinterpret_cast<const int64_t*>(&reg.reg), 4);
+                os << _mm256_extract_epi64(reg.reg, 0) << ", "
+                    << _mm256_extract_epi64(reg.reg, 1) << ", "
+                    << _mm256_extract_epi64(reg.reg, 2) << ", "
+                    << _mm256_extract_epi64(reg.reg, 3);
             } else {
-                printer(reinterpret_cast<const uint64_t*>(&reg.reg), 4);
+                os << static_cast<uint64_t>(_mm256_extract_epi64(reg.reg, 0)) << ", "
+                    << static_cast<uint64_t>(_mm256_extract_epi64(reg.reg, 1)) << ", "
+                    << static_cast<uint64_t>(_mm256_extract_epi64(reg.reg, 2)) << ", "
+                    << static_cast<uint64_t>(_mm256_extract_epi64(reg.reg, 3));
             }
             break;
 
         case 32:
             if constexpr (is_signed) {
-                printer(reinterpret_cast<const int32_t*>(&reg.reg), 8);
+                os << _mm256_extract_epi32(reg.reg, 0) << ", "
+                    << _mm256_extract_epi32(reg.reg, 1) << ", "
+                    << _mm256_extract_epi32(reg.reg, 2) << ", "
+                    << _mm256_extract_epi32(reg.reg, 3) << ", "
+                    << _mm256_extract_epi32(reg.reg, 4) << ", "
+                    << _mm256_extract_epi32(reg.reg, 5) << ", "
+                    << _mm256_extract_epi32(reg.reg, 6) << ", "
+                    << _mm256_extract_epi32(reg.reg, 7);
             } else {
-                printer(reinterpret_cast<const uint32_t*>(&reg.reg), 8);
+                os << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 0)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 1)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 2)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 3)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 4)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 5)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 6)) << ", "
+                    << static_cast<uint32_t>(_mm256_extract_epi32(reg.reg, 7));
             }
             break;
 
         case 16:
             if constexpr (is_signed) {
-                printer(reinterpret_cast<const int16_t*>(&reg.reg), 16);
+                os << _mm256_extract_epi16(reg.reg, 0) << ", "
+                    << _mm256_extract_epi16(reg.reg, 1) << ", "
+                    << _mm256_extract_epi16(reg.reg, 2) << ", "
+                    << _mm256_extract_epi16(reg.reg, 3) << ", "
+                    << _mm256_extract_epi16(reg.reg, 4) << ", "
+                    << _mm256_extract_epi16(reg.reg, 5) << ", "
+                    << _mm256_extract_epi16(reg.reg, 6) << ", "
+                    << _mm256_extract_epi16(reg.reg, 7) << ", "
+                    << _mm256_extract_epi16(reg.reg, 8) << ", "
+                    << _mm256_extract_epi16(reg.reg, 9) << ", "
+                    << _mm256_extract_epi16(reg.reg, 10) << ", "
+                    << _mm256_extract_epi16(reg.reg, 11) << ", "
+                    << _mm256_extract_epi16(reg.reg, 12) << ", "
+                    << _mm256_extract_epi16(reg.reg, 13) << ", "
+                    << _mm256_extract_epi16(reg.reg, 14) << ", "
+                    << _mm256_extract_epi16(reg.reg, 15);
             } else {
-                printer(reinterpret_cast<const uint16_t*>(&reg.reg), 16);
+                os << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 0)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 1)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 2)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 3)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 4)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 5)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 6)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 7)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 8)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 9)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 10)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 11)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 12)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 13)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 14)) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi16(reg.reg, 15));
             }
             break;
 
         case 8:
             if constexpr (is_signed) {
-                printer(reinterpret_cast<const int8_t*>(&reg.reg), 32, true);
+                os << _mm256_extract_epi8(reg.reg, 0) << ", "
+                    << _mm256_extract_epi8(reg.reg, 1) << ", "
+                    << _mm256_extract_epi8(reg.reg, 2) << ", "
+                    << _mm256_extract_epi8(reg.reg, 3) << ", "
+                    << _mm256_extract_epi8(reg.reg, 4) << ", "
+                    << _mm256_extract_epi8(reg.reg, 5) << ", "
+                    << _mm256_extract_epi8(reg.reg, 6) << ", "
+                    << _mm256_extract_epi8(reg.reg, 7) << ", "
+                    << _mm256_extract_epi8(reg.reg, 8) << ", "
+                    << _mm256_extract_epi8(reg.reg, 9) << ", "
+                    << _mm256_extract_epi8(reg.reg, 10) << ", "
+                    << _mm256_extract_epi8(reg.reg, 11) << ", "
+                    << _mm256_extract_epi8(reg.reg, 12) << ", "
+                    << _mm256_extract_epi8(reg.reg, 13) << ", "
+                    << _mm256_extract_epi8(reg.reg, 14) << ", "
+                    << _mm256_extract_epi8(reg.reg, 15) << ", "
+                    << _mm256_extract_epi8(reg.reg, 16) << ", "
+                    << _mm256_extract_epi8(reg.reg, 17) << ", "
+                    << _mm256_extract_epi8(reg.reg, 18) << ", "
+                    << _mm256_extract_epi8(reg.reg, 19) << ", "
+                    << _mm256_extract_epi8(reg.reg, 20) << ", "
+                    << _mm256_extract_epi8(reg.reg, 21) << ", "
+                    << _mm256_extract_epi8(reg.reg, 22) << ", "
+                    << _mm256_extract_epi8(reg.reg, 23) << ", "
+                    << _mm256_extract_epi8(reg.reg, 24) << ", "
+                    << _mm256_extract_epi8(reg.reg, 25) << ", "
+                    << _mm256_extract_epi8(reg.reg, 26) << ", "
+                    << _mm256_extract_epi8(reg.reg, 27) << ", "
+                    << _mm256_extract_epi8(reg.reg, 28) << ", "
+                    << _mm256_extract_epi8(reg.reg, 29) << ", "
+                    << _mm256_extract_epi8(reg.reg, 30) << ", "
+                    << _mm256_extract_epi8(reg.reg, 31);
             } else {
-                printer(reinterpret_cast<const uint8_t*>(&reg.reg), 32, true);
+                os << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 0) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 1) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 2) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 3) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 4) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 5) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 6) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 7) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 8) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 9) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 10) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 11) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 12) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 13) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 14) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 15) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 16) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 17) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 18) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 19) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 20) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 21) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 22) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 23) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 24) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 25) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 26) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 27) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 28) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 29) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 30) & 0xFF) << ", "
+                    << static_cast<uint16_t>(_mm256_extract_epi8(reg.reg, 31) & 0xFF);
             }
             break;
     }
@@ -168,5 +270,121 @@ FORCE_INLINE __m256i _mm256_srli_si256_dual(__m256i x) {  // NOLINT(clang-diagno
     } else {
         /* We already right shifted by 128 bits, so shift the lower lane the remaining number of bytes */
         return _mm256_srli_si256(shuffled, bytes - 16);
+    }
+}
+
+namespace simd::epi32_operators {
+    FORCE_INLINE __m256i operator ""_m256i(unsigned long long v) {
+        return _mm256_set1_epi32(static_cast<int>(v & 0xFFFFFFFF));
+    }
+
+#ifdef _MSC_VER
+    FORCE_INLINE __m256i operator>(__m256i lhs, __m256i rhs) {
+        return _mm256_cmpgt_epi32(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator==(__m256i lhs, __m256i rhs) {
+        return _mm256_cmpeq_epi32(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator&(__m256i lhs, __m256i rhs) {
+        return _mm256_and_si256(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator|(__m256i lhs, __m256i rhs) {
+        return _mm256_or_si256(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator^(__m256i lhs, __m256i rhs) {
+        return _mm256_xor_si256(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator+(__m256i lhs, __m256i rhs) {
+        return _mm256_add_epi32(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator-(__m256i lhs, __m256i rhs) {
+        return _mm256_sub_epi32(lhs, rhs);
+    }
+
+    FORCE_INLINE __m256i operator~(__m256i lhs) {
+        return _mm256_xor_si256(lhs, 0xFFFFFFFF_m256i);
+    }
+
+    FORCE_INLINE __m256i operator>(__m256i lhs, int rhs) {
+        return _mm256_cmpgt_epi32(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator==(__m256i lhs, int rhs) {
+        return _mm256_cmpeq_epi32(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator&(__m256i lhs, int rhs) {
+        return _mm256_and_si256(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator|(__m256i lhs, int rhs) {
+        return _mm256_or_si256(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator^(__m256i lhs, int rhs) {
+        return _mm256_xor_si256(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator+(__m256i lhs, int rhs) {
+        return _mm256_add_epi32(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator-(__m256i lhs, int rhs) {
+        return _mm256_sub_epi32(lhs, _mm256_set1_epi32(rhs));
+    }
+#endif
+}
+
+namespace simd::epi32 {
+    template <typename T> requires std::is_enum_v<T>
+    FORCE_INLINE __m256i from_enum(T val) {
+        return _mm256_set1_epi32(magic_enum::enum_integer(val));
+    }
+
+    FORCE_INLINE __m256i from_value(int v) {
+        return _mm256_set1_epi32(v);
+    }
+
+    FORCE_INLINE __m256i from_values(int a, int b, int c, int d, int e, int f, int g, int h) {
+        return _mm256_set_epi32(h, g, f, e, d, c, b, a);
+    }
+
+    FORCE_INLINE bool is_zero(__m256i v) {
+        return _mm256_testz_si256(v, v);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i load(const T* ptr) {
+        return _mm256_load_si256(reinterpret_cast<const __m256i*>(ptr));
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i loadu(const T* ptr) {
+        return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(ptr));
+    }
+
+    template <typename T>
+    FORCE_INLINE void store(T* ptr, __m256i a) {
+        _mm256_store_si256(reinterpret_cast<__m256i*>(ptr), a);
+    }
+
+    template <typename T>
+    FORCE_INLINE void storeu(T* ptr, __m256i a) {
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(ptr), a);
+    }
+
+    template <typename T>
+    FORCE_INLINE void maskstore(T* ptr, __m256i mask, __m256i src) {
+        _mm256_maskstore_epi32(reinterpret_cast<int*>(ptr), mask, src);
+    }
+
+    FORCE_INLINE __m256i max(__m256i a, __m256i b) {
+        return _mm256_max_epi32(a, b);
     }
 }

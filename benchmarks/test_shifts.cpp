@@ -44,7 +44,7 @@ int main() {
         AVX_ALIGNED dataset avx{};
         
         __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(input.data()));
-        
+
         x = _mm256_srli_si256_dual<shift>(x);
 
         _mm256_store_si256(reinterpret_cast<__m256i*>(avx.data()), x);
