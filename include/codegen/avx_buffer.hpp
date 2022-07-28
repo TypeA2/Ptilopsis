@@ -170,6 +170,11 @@ class avx_buffer {
         return m256i() + i;
     }
 
+    [[nodiscard]] constexpr size_t size_m256i() const {
+        /* How many 32-byte __m256i elements this contains*/
+        return (((sizeof(T) * _count) + sizeof(__m256i) - 1) & -static_cast<int64_t>(sizeof(__m256i))) / sizeof(__m256i);
+    }
+
     [[nodiscard]] constexpr T& operator[](size_type i) {
         return _ptr[i];
     }

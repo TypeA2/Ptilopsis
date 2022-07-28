@@ -53,7 +53,7 @@ class atomic_barrier {
     std::atomic_bool should_wait;
 
     public:
-    explicit atomic_barrier(bool should_wait = false) : should_wait{ should_wait } { }
+    atomic_barrier(bool should_wait = false) : should_wait{ should_wait } { }
     
     void wait() const noexcept {
         for (;;) {
@@ -83,7 +83,7 @@ class counting_barrier {
 
     public:
     counting_barrier() = delete;
-    explicit counting_barrier(size_t count) : count { count } { }
+    counting_barrier(size_t count) : count { count } { }
 
     template <typename Comp = std::equal_to<>>
     void wait_for(size_t val, Comp comp = {}) const noexcept {

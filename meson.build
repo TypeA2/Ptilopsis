@@ -48,10 +48,6 @@ prefix_sum_sources = [
     'benchmarks/prefix_sum.cpp',
 ]
 
-if is_msvc
-    prefix_sum_sources += 'src/XGetopt.cpp'
-endif
-
 includes = [ include_directories('include') ]
 
 executable(
@@ -63,12 +59,12 @@ executable(
     include_directories: includes
 )
 
-#executable(
-#    'prefix_sum',
-#    prefix_sum_sources,
-#    dependencies: threads_dep,
-#    include_directories: includes
-#)
+executable(
+    'prefix_sum',
+    prefix_sum_sources,
+    dependencies: [ threads_dep, magic_enum_dep, cxxopts_dep ],
+    include_directories: includes
+)
 
 executable(
     'test_shifts',

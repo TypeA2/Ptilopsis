@@ -1576,5 +1576,17 @@
     "command": "c++ -Iptilopsis.p -I. -I.. -I../include -I../subprojects/fmt-8.1.1/include -I../subprojects/magic_enum/include -I../subprojects/cxxopts-3.0.0/include -I../subprojects/range-v3-0.12.0/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Wextra -O0 -g -mavx2 -std=c++20 -Wno-implicit-fallthrough -Wno-missing-field-initializers -DFMT_HEADER_ONLY -pthread -isystem../subprojects/pareas-ast/include -MD -MQ ptilopsis.p/src_main.cpp.o -MF ptilopsis.p/src_main.cpp.o.d -o ptilopsis.p/src_main.cpp.o -c ../src/main.cpp",
     "file": "../src/main.cpp",
     "output": "ptilopsis.p/src_main.cpp.o"
+  },
+  {
+    "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
+    "command": "c++ -Iprefix_sum.p -I. -I.. -I../include -I../subprojects/magic_enum/include -I../subprojects/cxxopts-3.0.0/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Wextra -O0 -g -mavx2 -std=c++20 -Wno-implicit-fallthrough -Wno-missing-field-initializers -pthread -MD -MQ prefix_sum.p/benchmarks_prefix_sum.cpp.o -MF prefix_sum.p/benchmarks_prefix_sum.cpp.o.d -o prefix_sum.p/benchmarks_prefix_sum.cpp.o -c ../benchmarks/prefix_sum.cpp",
+    "file": "../benchmarks/prefix_sum.cpp",
+    "output": "prefix_sum.p/benchmarks_prefix_sum.cpp.o"
+  },
+  {
+    "directory": "/mnt/f/Projects/LIACS/Thesis/Ptilopsis/build",
+    "command": "c++ -Itest_shifts.p -I. -I.. -I../include -I../subprojects/magic_enum/include -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wnon-virtual-dtor -Wextra -O0 -g -mavx2 -std=c++20 -Wno-implicit-fallthrough -Wno-missing-field-initializers -MD -MQ test_shifts.p/benchmarks_test_shifts.cpp.o -MF test_shifts.p/benchmarks_test_shifts.cpp.o.d -o test_shifts.p/benchmarks_test_shifts.cpp.o -c ../benchmarks/test_shifts.cpp",
+    "file": "../benchmarks/test_shifts.cpp",
+    "output": "test_shifts.p/benchmarks_test_shifts.cpp.o"
   }
 ]

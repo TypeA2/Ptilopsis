@@ -370,6 +370,11 @@ namespace simd::epi32 {
     }
 
     template <typename T>
+    FORCE_INLINE __m256i maskload(const T* ptr, __m256i mask) {
+        return _mm256_maskload_epi32(reinterpret_cast<const int*>(ptr), mask);
+    }
+
+    template <typename T>
     FORCE_INLINE void store(T* ptr, __m256i a) {
         _mm256_store_si256(reinterpret_cast<__m256i*>(ptr), a);
     }
@@ -387,4 +392,11 @@ namespace simd::epi32 {
     FORCE_INLINE __m256i max(__m256i a, __m256i b) {
         return _mm256_max_epi32(a, b);
     }
+
+    template <typename T>
+    FORCE_INLINE __m256i gather(const T* base, __m256i vindex) {
+        return _mm256_i32gather_epi32(reinterpret_cast<const int*>(base), vindex, 4);
+    }
+
+
 }

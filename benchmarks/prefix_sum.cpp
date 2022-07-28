@@ -19,11 +19,12 @@
 
 #ifdef _MSC_VER
 #   include <intrin.h>
-#   include "XGetopt.h"
 #else
 /* CPUID is an intrinsic on MSVC */
 #   include <cpuid.h>
 #endif
+
+#include <cxxopts.hpp>
 
 #include "simd.hpp"
 #include "threading.hpp"
@@ -162,29 +163,35 @@ class tester {
 };
 
 static tester setup(int argc, char** argv) {
-    int c;
+    cxxopts::Options options("prefix_sum", "prefix sum benchmark");
+    options.add_options()
+        ("h,help", "Print usage")
+        ("p,plot", "Output for plotting", cxxopts::value<bool>()->default_value("false"))
+        ("t,threads", "Number of threads", cxxopts::value<int64_t>()->default_value(std::to_string(std::thread::hardware_concurrency())));
+
+    options.custom_help("[-p] [-t <threadcount>]");
     bool plot = false;
-    while ((c = getopt(argc, argv, "pt:")) != -1) {
-        switch(c) {
-            case 'p':
-                plot = true;
-                break;
+    try {
+        auto res = options.parse(argc, argv);
 
-            case 't': {
-                auto val = std::stol(optarg);
-                if (val > 0) {
-                    thread_count = std::min<size_t>(val, input_size);
-                    partition_size = divide_and_round_up(input_size, thread_count);
-                    partition_size_add1 = divide_and_round_up(input_size, thread_count + 1);
-                    partition_size_align4 = round_up_to_multiple(partition_size, 4);
-                    partition_size_align8 = round_up_to_multiple(partition_size, 8);
-                }
-                break;
-            }
-
-            default:
-                break;
+        if (res.count("help")) {
+            std::cout << options.help() << '\n';
+            std::exit(EXIT_SUCCESS);
         }
+
+        plot = res["plot"].as<bool>();
+        auto val = res["threads"].as<int64_t>();
+        if (val > 0) {
+            thread_count = std::min<size_t>(val, input_size);
+            partition_size = divide_and_round_up(input_size, thread_count);
+            partition_size_add1 = divide_and_round_up(input_size, thread_count + 1);
+            partition_size_align4 = round_up_to_multiple(partition_size, 4);
+            partition_size_align8 = round_up_to_multiple(partition_size, 8);
+        }
+    } catch(const cxxopts::OptionException& e) {
+        std::cerr << e.what() << '\n';
+        std::cerr << options.help() << '\n';
+        std::exit(EXIT_FAILURE);
     }
 
     std::cerr << "Elements:           " << input_size << "\n"

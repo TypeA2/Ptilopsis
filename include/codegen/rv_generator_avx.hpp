@@ -9,5 +9,6 @@ class rv_generator_avx : public rv_generator_st {
 
     private:
     void preprocess() override;
+    void isn_cnt() override;
 };
 

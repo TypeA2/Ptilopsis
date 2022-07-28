@@ -78,7 +78,7 @@ std::ostream& rv_generator::print(std::ostream& os, bool disassemble) const {
 
     auto max_digits = [nodes=nodes]<typename T>(const avx_buffer<T>& buf) {
         return static_cast<size_t>(
-            1 + log10l(*std::max_element(buf.begin(), buf.end())));
+            1 + log10l(std::max<uint32_t>(1, *std::max_element(buf.begin(), buf.end()))));
     };
 
     auto node_digits = static_cast<size_t>(log10l(static_cast<long double>(nodes)) + 1);
@@ -140,11 +140,11 @@ void rv_generator_st::process() {
 
     time("preprocess", &rv_generator_st::preprocess);
     time("isn_cnt", &rv_generator_st::isn_cnt);
-    time("isn_gen", &rv_generator_st::isn_gen);
-    time("optimize", &rv_generator_st::optimize);
-    time("regalloc", &rv_generator_st::regalloc);
-    time("fix_jumps", &rv_generator_st::fix_jumps);
-    time("postprocess", &rv_generator_st::postprocess);
+    //time("isn_gen", &rv_generator_st::isn_gen);
+    //time("optimize", &rv_generator_st::optimize);
+    //time("regalloc", &rv_generator_st::regalloc);
+    //time("fix_jumps", &rv_generator_st::fix_jumps);
+    //time("postprocess", &rv_generator_st::postprocess);
 
     std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});
 

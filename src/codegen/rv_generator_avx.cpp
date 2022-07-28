@@ -14,11 +14,8 @@ namespace epi32 = simd::epi32;
 void rv_generator_avx::preprocess() {
     using enum rv_node_type;
 
-    //std::cout << node_data << '\n';
-    //std::cout << result_types << '\n';
-
     /* Work in steps of 8 32-bit elements at a time */
-    for (size_t i = 0; i < (node_types.size() / 8); ++i) {
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
         /* Retrieve all func_arg and func_call_arg nodes */
         __m256i types = _mm256_load_si256(node_types.m256i(i));
 
@@ -109,14 +106,12 @@ void rv_generator_avx::preprocess() {
      *   If the last argument is a normal integer node, all arguments are in registers.
      *   If the last argument is a normal float argument, all floats fit in registers, but the int arguments may have overflowed
      */
-    for (size_t i = 0; i < (node_types.size() / 8); ++i) {
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
         __m256i types = epi32::load(node_types.m256i(i));
 
         __m256i func_call_arg_list_mask = (types == epi32::from_enum(func_call_arg_list));
 
         if (!epi32::is_zero(func_call_arg_list_mask)) {
-            const __m256i iota = epi32::from_value(static_cast<int>(i << 3)) + epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
-
             /* Unaligned load, use pointer arithmetic to prevent overflows */
             __m256i prev_types = epi32::loadu(&node_types[i * 8] - 1);
 
@@ -153,4 +148,47 @@ void rv_generator_avx::preprocess() {
             }
         }
     }
+
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        const __m256i iota = epi32::from_value(static_cast<int>(i << 3)) + epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
+
+        __m256i parents = epi32::load(this->parents.m256i(i));
+
+        /* All nodes with parents. There is only ever 1 node per program without a parent, so this mask is always nonzero */
+        __m256i valid_parents_mask = (parents > -1);
+        __m256i parent_types = epi32::gather(node_types.data(), parents & valid_parents_mask);
+
+        /* All nodes of which the parent is a comparison node */
+        __m256i parent_eq_expr_mask = ((parent_types & epi32::from_enum(eq_expr)) == epi32::from_enum(eq_expr));
+
+        /* All targeted nodes */
+        __m256i result_types = epi32::load(this->result_types.m256i(i));
+        result_types = result_types & parent_eq_expr_mask;
+
+        /* The ones that are of data type float */
+        __m256i result_types_mask = (result_types == epi32::from_enum(rv_data_type::FLOAT));
+
+        if (!epi32::is_zero(result_types_mask)) {
+
+            /* The parents of the nodes in result_types_mask should be se to data type float
+             * AVX512F required for scatter, for now just scalar:
+             * https://newbedev.com/what-do-you-do-without-fast-gather-and-scatter-in-avx2-instructions
+             */
+            AVX_ALIGNED int should_store_mask[8];
+            epi32::store(should_store_mask, result_types_mask);
+
+            AVX_ALIGNED uint32_t parent_indices[8];
+            epi32::store(parent_indices, parents);
+
+            for (size_t i = 0; i < 8; ++i) {
+                if (should_store_mask) {
+                    this->result_types[parent_indices[i]] = rv_data_type::FLOAT;
+                }
+            }
+        }
+    }
+}
+
+void rv_generator_avx::isn_cnt() {
+
 }
