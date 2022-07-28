@@ -827,9 +827,13 @@ constexpr auto generate_instr_table() {
     };
 
     /* sw */
-    res[func_call_arg_float_as_int] = { all_types(0b0000000'00000'00000'010'00000'0100011), no_instr, no_instr, no_instr };
+    res[func_call_arg_float_as_int] = { all_types(0b1110000'00000'00000'000'00000'1010011), no_instr, no_instr, no_instr };
     /* sw, sw */
-    res[func_call_arg_on_stack] = { all_types(0b0000000'00000'01000'010'00000'01000110), all_types(0b0000000'00000'00000'010'00000'0100011), no_instr, no_instr };
+    res[func_call_arg_on_stack] = {
+        /* sw, fsw relative to sp */
+        ArrayForTypes<uint32_t>{ err, err, 0b0000000'00000'00010'010'00000'0100011, 0b0000000'00000'00000'010'00010'0100111, err, err },
+        no_instr, no_instr, no_instr
+    };
 
     return res.get();
 }

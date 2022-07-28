@@ -26,60 +26,51 @@ struct avx_formatter {
 template <size_t bits, bool is_signed> requires integer_size<bits>
 std::ostream& operator<<(std::ostream& os, const avx_formatter<bits, is_signed>& reg) {
     os << '[';
+
+    auto printer = [&os](auto* ptr, size_t count, bool cast = false) {
+        if (cast) {
+            for (size_t i = 0; i < (count - 1); ++i) {
+                os << static_cast<int64_t>(ptr[i]) << ", ";
+            }
+            os << static_cast<int64_t>(ptr[count - 1]);
+        } else {
+            for (size_t i = 0; i < (count - 1); ++i) {
+                os << ptr[i] << ", ";
+            }
+            os << ptr[count - 1];
+        }
+    };
+
     switch (bits) {
         case 64:
             if constexpr (is_signed) {
-                for (size_t i = 0; i < 3; ++i) {
-                    os << reg.reg.m256i_i64[i] << ", ";
-                }
-                os << reg.reg.m256i_i64[3];
+                printer(reinterpret_cast<const int64_t*>(&reg.reg), 4);
             } else {
-                for (size_t i = 0; i < 3; ++i) {
-                    os << reg.reg.m256i_u64[i] << ", ";
-                }
-                os << reg.reg.m256i_u64[3];
+                printer(reinterpret_cast<const uint64_t*>(&reg.reg), 4);
             }
             break;
 
         case 32:
             if constexpr (is_signed) {
-                for (size_t i = 0; i < 7; ++i) {
-                    os << reg.reg.m256i_i32[i] << ", ";
-                }
-                os << reg.reg.m256i_i32[7];
+                printer(reinterpret_cast<const int32_t*>(&reg.reg), 8);
             } else {
-                for (size_t i = 0; i < 7; ++i) {
-                    os << reg.reg.m256i_u32[i] << ", ";
-                }
-                os << reg.reg.m256i_u32[7];
+                printer(reinterpret_cast<const uint32_t*>(&reg.reg), 8);
             }
             break;
 
         case 16:
             if constexpr (is_signed) {
-                for (size_t i = 0; i < 15; ++i) {
-                    os << reg.reg.m256i_i16[i] << ", ";
-                }
-                os << reg.reg.m256i_i16[15];
+                printer(reinterpret_cast<const int16_t*>(&reg.reg), 16);
             } else {
-                for (size_t i = 0; i < 15; ++i) {
-                    os << reg.reg.m256i_u16[i] << ", ";
-                }
-                os << reg.reg.m256i_u16[15];
+                printer(reinterpret_cast<const uint16_t*>(&reg.reg), 16);
             }
             break;
 
         case 8:
             if constexpr (is_signed) {
-                for (size_t i = 0; i < 31; ++i) {
-                    os << static_cast<int>(reg.reg.m256i_i8[i]) << ", ";
-                }
-                os << static_cast<int>(reg.reg.m256i_i8[31]);
+                printer(reinterpret_cast<const int8_t*>(&reg.reg), 32, true);
             } else {
-                for (size_t i = 0; i < 31; ++i) {
-                    os << static_cast<int>(reg.reg.m256i_u8[i]) << ", ";
-                }
-                os << static_cast<int>(reg.reg.m256i_u8[31]);
+                printer(reinterpret_cast<const uint8_t*>(&reg.reg), 32, true);
             }
             break;
     }
@@ -90,12 +81,16 @@ std::ostream& operator<<(std::ostream& os, const avx_formatter<bits, is_signed>&
 
 template <size_t bits = 32, bool is_signed = false>
 std::ostream& print(std::ostream& os, __m256i reg) {
-    os << avx_formatter<bits, is_signed>{ .reg = reg };
+    return (os << avx_formatter<bits, is_signed>{ .reg = reg });
 }
 
 template <size_t bits = 32, bool is_signed = false>
 auto format(__m256i reg) {
     return avx_formatter<bits, is_signed>{.reg = reg };
+}
+
+inline std::ostream& operator<<(std::ostream& os, __m256i reg) {
+    return (os << format(reg));
 }
 
 /* _mm256_slli_si256 operates on 2 128-bit lanes. This emulates a full-width

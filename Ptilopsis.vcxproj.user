@@ -3,21 +3,21 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl -d -s -o NUL</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl  -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl -d -s -o NUL</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl  -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl -d -s -o NUL</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl  -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl -d -s -o NUL</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\comp1.ptl  -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

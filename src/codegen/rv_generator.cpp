@@ -258,7 +258,7 @@ void rv_generator_st::preprocess() {
                     node_types[i] |= 0b10;// rv_node_type::func_arg_on_stack;
 
                     /* Every argument past the 8th takes 4 bytes */
-                    node_data[i] = (ir_idx - 8) * 4;
+                    node_data[i] = (ir_idx - 8);
                 }
             }
         }
