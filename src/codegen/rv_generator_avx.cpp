@@ -216,7 +216,7 @@ void rv_generator_avx::isn_cnt() {
             __m256i prev_node_types = epi32::loadu(&this->node_types[i * 8] - 1);
             
             // TODO is this branch even necessary?
-            __m256i func_call_arg_mask = func_call_arg_list_mask | ((prev_node_types & epi32::from_enum(func_call_arg)) == epi32::from_enum(func_call_arg));
+            __m256i func_call_arg_mask = func_call_arg_list_mask & ((prev_node_types & epi32::from_enum(func_call_arg)) == epi32::from_enum(func_call_arg));
             /* In a valid program we're basically guaranteed to get at least 1 here, so skip the possible branch */
             __m256i prev_child_idx = epi32::loadu(&this->child_idx[i * 8] - 1);
 
