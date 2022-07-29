@@ -312,7 +312,7 @@ void rv_generator_st::isn_cnt() {
             }
         }
 
-        if (node_types[i] != invalid) {
+        if (parents[i] != -1) {
             /* Parent-less top-level node is a statement list */
             auto parent_type = (parents[i] >= 0) ? node_types[parents[i]] : rv_node_type::statement_list;
 
@@ -330,7 +330,7 @@ void rv_generator_st::isn_cnt() {
     };
 
     std::ranges::transform(std::views::iota(uint32_t{ 0 }, nodes), node_sizes.begin(), node_count);
-
+    return;
     /* Compute the actual instruction locations with an exclusive prefix sum */
     std::exclusive_scan(node_sizes.begin(), node_sizes.end(), node_locations.begin(), 0);
 

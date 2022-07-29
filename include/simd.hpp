@@ -307,6 +307,10 @@ namespace simd::epi32_operators {
         return _mm256_sub_epi32(lhs, rhs);
     }
 
+    FORCE_INLINE __m256i operator*(__m256i lhs, __m256i rhs) {
+        return _mm256_mullo_epi32(lhs, rhs);
+    }
+
     FORCE_INLINE __m256i operator~(__m256i lhs) {
         return _mm256_xor_si256(lhs, 0xFFFFFFFF_m256i);
     }
@@ -337,6 +341,10 @@ namespace simd::epi32_operators {
 
     FORCE_INLINE __m256i operator-(__m256i lhs, int rhs) {
         return _mm256_sub_epi32(lhs, _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator*(__m256i lhs, int rhs) {
+        return _mm256_mullo_epi32(lhs, _mm256_set1_epi32(rhs));
     }
 #endif
 }
@@ -398,5 +406,7 @@ namespace simd::epi32 {
         return _mm256_i32gather_epi32(reinterpret_cast<const int*>(base), vindex, 4);
     }
 
-
+    FORCE_INLINE __m256i zero() {
+        return _mm256_setzero_si256();
+    }
 }

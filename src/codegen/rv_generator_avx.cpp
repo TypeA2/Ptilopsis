@@ -109,6 +109,7 @@ void rv_generator_avx::preprocess() {
     for (size_t i = 0; i < node_types.size_m256i(); ++i) {
         __m256i types = epi32::load(node_types.m256i(i));
 
+        /* NOTE: Pareas has a i > 0 check, but in any valid program for i == 0, this mask will be 0 */
         __m256i func_call_arg_list_mask = (types == epi32::from_enum(func_call_arg_list));
 
         if (!epi32::is_zero(func_call_arg_list_mask)) {
@@ -121,8 +122,6 @@ void rv_generator_avx::preprocess() {
             /* Mask of all stack func call args */
             __m256i func_call_stack_arg_mask = (prev_types == epi32::from_enum(func_call_arg_on_stack));
             if (!epi32::is_zero(func_call_stack_arg_mask)) {
-                
-
                 __m256i adjusted_node_data = prev_node_data + 1;
 
                 /* Store the relevant updated fields */
@@ -190,5 +189,58 @@ void rv_generator_avx::preprocess() {
 }
 
 void rv_generator_avx::isn_cnt() {
+    using enum rv_node_type;
 
+    /* Map node_count onto all nodes */
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        __m256i node_types = epi32::load(this->node_types.m256i(i));
+        /* node_types is the in the outer array, so multiply by _mm256_set1_epi32 to get the actual index */
+        // TODO maybe pad data_type_array_size to 8 elements and use a shift instead, also maybe pre-scale to 4
+        __m256i node_types_indices = node_types * data_type_count;
+
+        __m256i result_types = epi32::load(this->result_types.m256i(i));
+        /* result_types is the index in the inner array, so just add to the previously calculated offsets */
+        node_types_indices = node_types_indices + result_types;
+
+        /* Use the calculated indices to gather the base node counts */
+        __m256i base = epi32::gather(node_size_mapping.data(), node_types_indices);
+
+        /* Offset is calculated and applied to base value */
+        __m256i delta = epi32::zero();
+
+        __m256i func_call_arg_list_mask = (node_types == epi32::from_enum(func_call_arg_list));
+        if (!epi32::is_zero(func_call_arg_list_mask)) {
+            /* Already add 1 for every arg list */
+            delta = delta + (1_m256i & func_call_arg_list_mask);
+
+            __m256i prev_node_types = epi32::loadu(&this->node_types[i * 8] - 1);
+            
+            // TODO is this branch even necessary?
+            __m256i func_call_arg_mask = func_call_arg_list_mask | ((prev_node_types & epi32::from_enum(func_call_arg)) == epi32::from_enum(func_call_arg));
+            /* In a valid program we're basically guaranteed to get at least 1 here, so skip the possible branch */
+            __m256i prev_child_idx = epi32::loadu(&this->child_idx[i * 8] - 1);
+
+            /* Add the child idx + 1 of the previous node (so the last arg) to the func call arg list */
+            delta = delta + ((prev_child_idx + 1) & func_call_arg_mask);
+        }
+
+        __m256i parents = epi32::load(this->parents.m256i(i));
+        __m256i valid_parents_mask = ~(parents == -1);
+        __m256i parent_types = epi32::gather(this->node_types.data(), parents & valid_parents_mask);
+        __m256i child_idx = epi32::load(this->child_idx.m256i(i));
+
+        /* Add 1 for the conditional nodes of if/if_else/while, and add 1 for the if-branch of an if_else */
+        __m256i if_else_mask = (parent_types == epi32::from_enum(if_else_statement));
+        __m256i if_statement_conditional_mask = ((child_idx == 0) & (if_else_mask | (parent_types == epi32::from_enum(if_statement))));
+
+        /* All nodes with child_idx == 0 and that are if or if_else */
+        delta = delta + (1_m256i & if_statement_conditional_mask);
+
+        __m256i if_else_while_2nd_node_mask = ((child_idx == 1) & (if_else_mask | (parent_types == epi32::from_enum(while_statement))));
+        delta = delta + (1_m256i & if_else_while_2nd_node_mask);
+
+        base = base + delta;
+
+        epi32::store(this->node_sizes.m256i(i), base);
+    }
 }

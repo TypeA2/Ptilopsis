@@ -187,8 +187,11 @@ class mapping_helper {
     }
 };
 
+constexpr size_t data_type_count = magic_enum::enum_count<rv_data_type>();
+constexpr size_t data_type_array_size = data_type_count * sizeof(uint32_t);
+
 template <typename T>
-using ArrayForTypes = std::array<T, magic_enum::enum_count<rv_data_type>()>;
+using ArrayForTypes = std::array<T, data_type_count>;
 
 /* Similar to NODE_COUNT_TABLE in Pareas */
 constexpr auto generate_size_mapping() {
@@ -259,6 +262,9 @@ constexpr auto generate_size_mapping() {
 }
 
 constexpr auto node_size_mapping = generate_size_mapping();
+
+static_assert(sizeof(node_size_mapping) == (data_type_array_size * max_node_types),
+    "node_size_mapping has unexpected size");
 
 /* Our HAS_INSTR_TABLE */
 constexpr auto generate_has_instr() {
