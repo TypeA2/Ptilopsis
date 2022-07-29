@@ -72,7 +72,7 @@ void rv_generator_avx::preprocess() {
                 /* node_data = reg_offset - 8 for the nodes on the stack */
                 reg_offset = reg_offset - (8_m256i & on_stack_mask);
                 /* node_data = reg_offset for all float nodes with node data > 7 */
-                node_data = _mm256_blendv_epi8(node_data, reg_offset, comp_mask);
+                node_data = epi32::blendv(node_data, reg_offset, comp_mask);
             }
 
             {
@@ -92,7 +92,7 @@ void rv_generator_avx::preprocess() {
                 types = types | (on_stack_mask & 0b10);
                 /* Write node data for nodes on stack */
                 reg_offset = reg_offset - (8_m256i & on_stack_mask);
-                node_data = _mm256_blendv_epi8(node_data, reg_offset, int_func_args_mask);
+                node_data = epi32::blendv(node_data, reg_offset, int_func_args_mask);
             }
 
             /* Write types and node data back to buffer */
@@ -173,15 +173,12 @@ void rv_generator_avx::preprocess() {
              * AVX512F required for scatter, for now just scalar:
              * https://newbedev.com/what-do-you-do-without-fast-gather-and-scatter-in-avx2-instructions
              */
-            AVX_ALIGNED int should_store_mask[8];
-            epi32::store(should_store_mask, result_types_mask);
+            AVX_ALIGNED auto should_store_mask = epi32::extract(result_types_mask);
+            AVX_ALIGNED auto parent_indices = epi32::extract(parents);
 
-            AVX_ALIGNED uint32_t parent_indices[8];
-            epi32::store(parent_indices, parents);
-
-            for (size_t i = 0; i < 8; ++i) {
-                if (should_store_mask) {
-                    this->result_types[parent_indices[i]] = rv_data_type::FLOAT;
+            for (size_t j = 0; j < 8; ++j) {
+                if (should_store_mask[j]) {
+                    this->result_types[parent_indices[j]] = rv_data_type::FLOAT;
                 }
             }
         }
@@ -242,5 +239,75 @@ void rv_generator_avx::isn_cnt() {
         base = base + delta;
 
         epi32::store(this->node_sizes.m256i(i), base);
+    }
+
+    /* Prefix sum from ADMS20_05 */
+    
+    /* Accumulator */
+    __m256i offset = epi32::zero();
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        __m256i node_size = epi32::loadu(&this->node_sizes[i * 8] - 1);
+
+        /* Compute the actual prefix sum */
+        node_size = node_size + _mm256_slli_si256_dual<4>(node_size);
+        node_size = node_size + _mm256_slli_si256_dual<8>(node_size);
+        node_size = node_size + _mm256_slli_si256_dual<16>(node_size);
+
+        node_size = node_size + offset;
+
+        /* Broadcast last value to every value of offset */
+        offset = _mm256_permutevar8x32_epi32(node_size, epi32::from_value(7));
+
+        epi32::store(this->node_locations.m256i(i), node_size);
+    }
+
+    /* instr_count_fix not needed, we shouldn't be seeing invalid nodes */
+
+    /* instr_count_fix_post */
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        __m256i parents = epi32::load(this->parents.m256i(i));
+        __m256i valid_parents_mask = (parents > -1);
+
+        __m256i child_idx = epi32::load(this->child_idx.m256i(i));
+        __m256i parent_types = epi32::gather(this->node_types.data(), parents & valid_parents_mask);
+
+        /* All conditional nodes of if and if_else */
+        __m256i conditionals_mask = ((parent_types & epi32::from_enum(if_statement)) == epi32::from_enum(if_statement));
+        /* Lowest bit represents the conditional node child index, so check if it's equal */
+        conditionals_mask = conditionals_mask & (child_idx == (parent_types & 1));
+
+        if (!epi32::is_zero(conditionals_mask)) {
+            /* For all conditional nodes, set the offset of the parent to past the current node */
+            __m256i indices = epi32::blendv(epi32::from_value(-1), parents, conditionals_mask);
+            __m256i values = epi32::load(this->node_locations.m256i(i));
+
+            /* Get base node size for all nodes */
+            __m256i node_types_indices = (epi32::load(this->node_types.m256i(i)) * data_type_count) + epi32::load(this->result_types.m256i(i));
+            values = values + (epi32::maskgatherz(node_size_mapping.data(), node_types_indices, conditionals_mask));
+
+            AVX_ALIGNED auto should_store_mask = epi32::extract(conditionals_mask);
+            AVX_ALIGNED auto fixed_indices = epi32::extract(indices);
+            AVX_ALIGNED auto fixed_values = epi32::extract(values);
+
+            for (size_t j = 0; j < 8; ++j) {
+                if (should_store_mask[j]) {
+                    node_locations[fixed_indices[j]] = fixed_values[j];
+                }
+            }
+        }
+
+        /* Func call args modify their own args, so no complicated stores, just masks */
+        // TODO possible double load in this loop
+        __m256i func_call_arg_mask = epi32::load(this->node_types.m256i(i));
+        
+        func_call_arg_mask = (epi32::from_enum(func_call_arg) == (func_call_arg_mask & epi32::from_enum(func_call_arg)));
+
+        if (!epi32::is_zero(func_call_arg_mask)) {
+            /* New location is the location of the parent plus the child idx plus 1 */
+            __m256i parent_locations = epi32::maskgatherz(this->node_locations.data(), parents, func_call_arg_mask);
+            __m256i new_locs = parent_locations + epi32::load(this->child_idx.m256i(i)) + 1;
+
+            epi32::maskstore(this->node_locations.m256i(i), func_call_arg_mask, new_locs);
+        }
     }
 }

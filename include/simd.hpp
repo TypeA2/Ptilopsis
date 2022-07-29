@@ -406,7 +406,28 @@ namespace simd::epi32 {
         return _mm256_i32gather_epi32(reinterpret_cast<const int*>(base), vindex, 4);
     }
 
+    template <typename T>
+    FORCE_INLINE __m256i maskgather(__m256i src, const T* base, __m256i vindex, __m256i mask) {
+        return _mm256_mask_i32gather_epi32(src, reinterpret_cast<const int*>(base), vindex, mask, 4);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i maskgatherz(const T* base, __m256i vindex, __m256i mask) {
+        return _mm256_mask_i32gather_epi32(_mm256_setzero_si256(), reinterpret_cast<const int*>(base), vindex, mask, 4);
+    }
+
+    FORCE_INLINE __m256i blendv(__m256i a, __m256i b, __m256i mask) {
+        return _mm256_blendv_epi8(a, b, mask);
+    }
+
     FORCE_INLINE __m256i zero() {
         return _mm256_setzero_si256();
+    }
+
+    template <typename T = int> requires (sizeof(T) == 4)
+    FORCE_INLINE [[nodiscard]] std::array<T, 8> extract(__m256i a) {
+        AVX_ALIGNED std::array<T, 8> res;
+        epi32::store(res.data(), a);
+        return res;
     }
 }

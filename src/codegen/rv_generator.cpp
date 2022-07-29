@@ -330,10 +330,10 @@ void rv_generator_st::isn_cnt() {
     };
 
     std::ranges::transform(std::views::iota(uint32_t{ 0 }, nodes), node_sizes.begin(), node_count);
-    return;
+    
     /* Compute the actual instruction locations with an exclusive prefix sum */
     std::exclusive_scan(node_sizes.begin(), node_sizes.end(), node_locations.begin(), 0);
-
+    //return;
     /* not needed as we can implement an exclusive prefix sum directly */
     //std::ranges::rotate(node_locations, node_locations.end() - 1);
 
@@ -383,7 +383,7 @@ void rv_generator_st::isn_cnt() {
             node_locations[fix_idx[i]] = fix_offsets[i];
         }
     }
-
+    return;
     /* Function table generation */
     auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
     auto src_buf = avx_buffer<uint32_t>::iota(nodes);

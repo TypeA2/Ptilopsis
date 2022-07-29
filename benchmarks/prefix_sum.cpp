@@ -286,7 +286,7 @@ void basic_avx(const tester& test) {
             /* Copy uppper half to lower half */
             offset = _mm256_permute2x128_si256(x, x, 0b0'001'0'001);
 
-            /* Of each half, copper last value to all other positions */
+            /* Of each half, copy last value to all other positions */
             offset = _mm256_shuffle_epi32(offset, 0b11'11'11'11);
 
             _mm256_store_si256(reinterpret_cast<__m256i*>(output.data() + i), x);
