@@ -310,4 +310,68 @@ void rv_generator_avx::isn_cnt() {
             epi32::maskstore(this->node_locations.m256i(i), func_call_arg_mask, new_locs);
         }
     }
+
+    /* Function table generation */
+    // TODO benchmark 1 vs 2 pass method (aka with vs without reallocations)
+    size_t func_count = 0;
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        __m256i node_types = epi32::load(this->node_types.m256i(i));
+
+        /* Count the number of function declarations*/
+        AVX_ALIGNED auto func_decl_mask = epi32::extract<uint32_t>(node_types == epi32::from_enum(func_decl));
+        for (uint32_t f : func_decl_mask) {
+            if (f) {
+                func_count += 1;
+            }
+        }
+    }
+
+    avx_buffer<uint32_t> func_decls { func_count };
+    auto func_decls_ptr = func_decls.data();
+    for (size_t i = 0; i < node_types.size_m256i(); ++i) {
+        __m256i node_types = epi32::load(this->node_types.m256i(i));
+
+        /* Get their indices */
+        AVX_ALIGNED auto func_decl_mask = epi32::extract<uint32_t>(node_types == epi32::from_enum(func_decl));
+        for (size_t j = 0; j < 8; ++j) {
+            if (func_decl_mask[j]) {
+                (*func_decls_ptr++) = static_cast<uint32_t>((i * 8) + j);
+            }
+        }
+    }
+    
+    /* Gather node data from all func decls */
+    function_ids = avx_buffer<uint32_t> { func_count };
+    func_starts = avx_buffer<uint32_t> { func_count };
+    avx_buffer<uint32_t> func_offsets { func_count };
+
+    // TODO load/loadu and store/storeu pairs here, not needed maybe? (data should be cached anyway though)
+    for (size_t i = 0; i < func_decls.size_m256i(); ++i) {
+        __m256i func_decl_indices = epi32::load(func_decls.m256i(i));
+
+        /* Retrieve the node data of every func decl */
+        epi32::store(this->function_ids.m256i(i), epi32::gather(this->node_data.data(), func_decl_indices));
+
+        /* Calculate the offset of each function */
+        __m256i offset = 6_m256i + epi32::gather(this->node_locations.data(), func_decl_indices);
+        epi32::storeu(&func_starts[i * 8] + 1, offset);
+        epi32::store(func_offsets.m256i(i), offset);
+    }
+
+    function_sizes = avx_buffer<uint32_t> { func_count };
+    for (size_t i = 0; i < func_decls.size_m256i(); ++i) {
+        /* Load elements and shifted elements directly */
+        __m256i shifted_offsets = epi32::loadu(&func_offsets[i * 8] - 1);
+        __m256i offsets = epi32::load(func_offsets.m256i(i));
+
+        epi32::store(function_sizes.m256i(i), offsets - shifted_offsets);
+    }
+
+    func_ends = avx_buffer<uint32_t> { func_count };
+    for (size_t i = 0; i < func_decls.size_m256i(); ++i) {
+        __m256i start = epi32::load(func_starts.m256i(i));
+        __m256i size = epi32::load(function_sizes.m256i(i));
+
+        epi32::store(func_ends.m256i(i), start + size);
+    }
 }

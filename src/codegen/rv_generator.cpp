@@ -383,7 +383,7 @@ void rv_generator_st::isn_cnt() {
             node_locations[fix_idx[i]] = fix_offsets[i];
         }
     }
-    return;
+
     /* Function table generation */
     auto func_offsets = avx_buffer<uint32_t>::iota(nodes);
     auto src_buf = avx_buffer<uint32_t>::iota(nodes);
@@ -393,11 +393,12 @@ void rv_generator_st::isn_cnt() {
             return node_types[i] == func_decl;
         })
     );
-
+    
     function_ids = avx_buffer<uint32_t>::zero(func_decls.size());
     std::ranges::transform(func_decls, function_ids.begin(), [this](uint32_t i) {
         return node_data[i];
     });
+
 
     avx_buffer<uint32_t> offsets { func_decls.size() };
     std::ranges::transform(func_decls, offsets.begin(), [this](uint32_t i) {
@@ -423,13 +424,6 @@ void rv_generator_st::isn_cnt() {
         func_ends[i] += function_sizes[i];
     }
 
-    return;
-    for (size_t i = 0; i < func_decls.size(); ++i) {
-        std::cout << "Function " << function_ids[i]
-                  << " of node " << func_decls[i]
-                  << " at " << rotated_offsets[i]
-                  << " of size " << function_sizes[i] << '\n';
-    }
 }
 
 void rv_generator_st::isn_gen() {

@@ -128,7 +128,7 @@ class avx_buffer {
     }
 
     [[nodiscard]] static constexpr avx_buffer zero(size_type count) {
-        return fill(count, 0);
+        return avx_buffer { count };
     }
 
     [[nodiscard]] static constexpr avx_buffer iota(size_type bound) {
@@ -137,7 +137,11 @@ class avx_buffer {
 
     [[nodiscard]] static constexpr avx_buffer fill(size_type count, T val) {
         avx_buffer buf { count };
-        std::ranges::fill(buf, val);
+
+        /* Zero-initialized is the default*/
+        if (val) {
+            std::ranges::fill(buf, val);
+        }
 
         return buf;
     }
