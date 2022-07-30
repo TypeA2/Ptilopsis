@@ -140,7 +140,7 @@ void rv_generator_st::process() {
 
     time("preprocess", &rv_generator_st::preprocess);
     time("isn_cnt", &rv_generator_st::isn_cnt);
-    //time("isn_gen", &rv_generator_st::isn_gen);
+    time("isn_gen", &rv_generator_st::isn_gen);
     //time("optimize", &rv_generator_st::optimize);
     //time("regalloc", &rv_generator_st::regalloc);
     //time("fix_jumps", &rv_generator_st::fix_jumps);
@@ -350,8 +350,8 @@ void rv_generator_st::isn_cnt() {
     }
 
     /* instr_count_fix_post */
-    avx_buffer<int32_t> fix_idx { nodes };
-    avx_buffer<uint32_t> fix_offsets { nodes };
+    avx_buffer<int32_t> fix_idx(nodes);
+    avx_buffer<uint32_t> fix_offsets(nodes);
 
     for (size_t i = 0; i < nodes; ++i) {
         if (parents[i] == -1 /* INVALID_NODE_IDX */) {
@@ -566,6 +566,8 @@ void rv_generator_st::isn_gen() {
         auto current_rs2 = avx_buffer<int64_t>::zero(level_size * 4);
         auto current_jt = avx_buffer<int64_t>::zero(level_size * 4);
 
+        //std::cout << "Level " << current_depth << ": " << idx_array.slice(start_index, end_index) << "\n\n";
+        //std::cout << '\n';
         /* Iterate over all indices in this level
          * Note: this corresponds to the inner `let` of compile_tree, containing the mapping to compile_node
          */
@@ -601,6 +603,9 @@ void rv_generator_st::isn_gen() {
             // after each level
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
                 auto local_registers = registers;
+
+               // std::cout << has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[idx])] << ' ';
+
                 /* This corresponds to compile_node */
                 if (has_instr_mapping[as_index(node_types[idx])][i][as_index(result_types[idx])]) {
                     //if (node_types[idx] == rv_node_type::func_decl_dummy) {

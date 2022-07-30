@@ -106,10 +106,8 @@ int main(int argc, char** argv) {
         std::unique_ptr<rv_generator> gen;
 
         if (simple) {
-            std::cout << "Running scalar mode\n";
             gen = std::make_unique<rv_generator_st>(depth_tree);
         } else {
-            std::cout << "Running AVX mode\n";
             gen = std::make_unique<rv_generator_avx>(depth_tree);
         }
 

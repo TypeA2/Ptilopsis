@@ -270,10 +270,10 @@ static_assert(sizeof(node_size_mapping) == (data_type_array_size * max_node_type
 constexpr auto generate_has_instr() {
     using enum rv_node_type;
 
-    mapping_helper<std::array<ArrayForTypes<bool>, 4>, max_node_types> res;
+    mapping_helper<std::array<ArrayForTypes<uint32_t>, 4>, max_node_types> res;
 
-    ArrayForTypes<bool> yes { true,  true,  true,  true,  true,  true  };
-    ArrayForTypes<bool> no  { false, false, false, false, false, false };
+    ArrayForTypes<uint32_t> yes { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF };
+    ArrayForTypes<uint32_t> no  { 0, 0, 0, 0, 0, 0 };
 
     res[invalid]        = { no,  no, no, no };
     res[statement_list] = { no,  no, no, no };
@@ -298,7 +298,7 @@ constexpr auto generate_has_instr() {
     res[logic_not_expr] = { yes, no, no, no };
     res[neg_expr]       = { yes, no, no, no };
 
-    res[literal_expr]     = { yes, yes, { false, false, false, true, false, false},  no };
+    res[literal_expr]     = { yes, yes, { 0, 0, 0, 0xFFFFFFFF, 0, 0},  no };
     res[cast_expr]        = { yes, no,  no,  no  };
     res[deref_expr]       = { yes, no,  no,  no  };
     res[assign_expr]      = { yes, yes, no,  no  };
@@ -311,19 +311,19 @@ constexpr auto generate_has_instr() {
     res[func_decl]     = { yes, yes, yes, yes };
     res[func_arg_list] = { no,  no,  no,  no  };
 
-    res[func_call_expression] = { yes, no, { false, false, true, true, false, false}, no };
+    res[func_call_expression] = { yes, no, { 0, 0, 0xFFFFFFFF, 0xFFFFFFFF, 0, 0}, no };
     res[func_call_arg_list]   = { yes, yes, no, no };
 
     res[if_statement]      = { yes, no,  no, no };
     res[while_statement]   = { yes, yes, no, no };
     res[if_else_statement] = { yes, yes, no, no };
 
-    res[eq_expr]  = { yes, { false, false, true, false, false, false}, no, no };
+    res[eq_expr]  = { yes, { 0, 0, 0xFFFFFFFF, 0xFFFFFFFF, 0, 0}, no, no };
     res[neq_expr] = { yes, yes, no, no };
     res[lt_expr]  = { yes, no,  no, no };
     res[gt_expr]  =  {yes, no,  no, no };
-    res[lte_expr] = { yes, { false, false, true, false, false, false}, no, no };
-    res[gte_expr] = { yes, { false, false, true, false, false, false}, no, no };
+    res[lte_expr] = { yes, { 0, 0, 0xFFFFFFFF, 0, 0, 0}, no, no };
+    res[gte_expr] = { yes, { 0, 0, 0xFFFFFFFF, 0, 0, 0}, no, no };
 
     res[func_arg]                   = { yes,  no, no, no };
     res[func_arg_float_as_int]      = { yes,  no, no, no };
@@ -336,6 +336,9 @@ constexpr auto generate_has_instr() {
 }
 
 constexpr auto has_instr_mapping = generate_has_instr();
+
+static_assert(sizeof(has_instr_mapping) == (data_type_array_size * max_node_types * 4),
+    "has_instr_mapping has unexpected size");
 
 constexpr auto generate_has_output() {
     using enum rv_node_type;
@@ -413,11 +416,11 @@ constexpr auto has_output = generate_has_output();
 constexpr auto generate_parent_arg_idx_lookup() {
     using enum rv_node_type;
 
-    mapping_helper<std::array<ArrayForTypes<int8_t>, 4>, max_node_types> res;
+    mapping_helper<std::array<ArrayForTypes<uint32_t>, 4>, max_node_types> res;
 
-    ArrayForTypes<int8_t> zero { 0, 0, 0, 0, 0, 0 };
-    ArrayForTypes<int8_t> one  { 1, 1, 1, 1, 1, 1 };
-    ArrayForTypes<int8_t> two  { 2, 2, 2, 2, 2, 2 };
+    ArrayForTypes<uint32_t> zero { 0, 0, 0, 0, 0, 0 };
+    ArrayForTypes<uint32_t> one  { 1, 1, 1, 1, 1, 1 };
+    ArrayForTypes<uint32_t> two  { 2, 2, 2, 2, 2, 2 };
 
     res[invalid]        = { two,  zero, zero, zero };
     res[statement_list] = { two,  zero, zero, zero };
@@ -480,6 +483,9 @@ constexpr auto generate_parent_arg_idx_lookup() {
 }
 
 constexpr auto parent_arg_idx_lookup = generate_parent_arg_idx_lookup();
+
+static_assert(sizeof(parent_arg_idx_lookup) == (data_type_array_size * max_node_types * 4),
+    "parent_arg_idx_lookup has unexpected size");
 
 constexpr auto generate_get_output_table() {
     using enum rv_node_type;

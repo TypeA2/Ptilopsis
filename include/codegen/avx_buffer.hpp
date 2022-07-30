@@ -63,6 +63,31 @@ class avx_buffer {
     constexpr avx_buffer() : _ptr { nullptr } { }
     constexpr explicit avx_buffer(size_t count) { _resize(count); }
 
+    constexpr avx_buffer(const avx_buffer& other) : avx_buffer { other._count } {
+        std::ranges::copy(other, _ptr);
+    }
+
+    constexpr avx_buffer& operator=(const avx_buffer& other) {
+        _resize(other._count);
+        std::ranges::copy(other, _ptr);
+
+        return *this;
+    }
+
+    constexpr avx_buffer(avx_buffer&& other) noexcept
+        : _count { std::exchange(other._count, 0) }
+        , _ptr { std::exchange(other._ptr, nullptr) } {
+    }
+
+    constexpr avx_buffer& operator=(avx_buffer&& other) noexcept {
+        clear();
+
+        _count = std::exchange(other._count, 0);
+        _ptr = std::exchange(other._ptr, nullptr);
+
+        return *this;
+    }
+
     template <std::ranges::sized_range R>
     constexpr explicit avx_buffer(R&& range) : avx_buffer { std::ranges::size(range) } {  // NOLINT(bugprone-forwarding-reference-overload)
         std::ranges::copy(range, _ptr);
@@ -76,14 +101,14 @@ class avx_buffer {
         return *this;
     }
 
-    template <typename R> requires (!std::ranges::sized_range<R>)
+    template <std::ranges::range R> requires (!std::ranges::sized_range<R>)
     constexpr explicit avx_buffer(R&& range) {  // NOLINT(bugprone-forwarding-reference-overload)
         auto vec = range_to_vec(range);
         _resize(vec.size());
         std::ranges::move(vec, _ptr);
     }
 
-    template <typename R> requires (!std::ranges::sized_range<R>)
+    template <std::ranges::range R> requires (!std::ranges::sized_range<R>)
     constexpr avx_buffer& operator=(R&& range) {
         auto vec = range_to_vec(range);
         _resize(vec.size());
@@ -99,30 +124,6 @@ class avx_buffer {
     constexpr avx_buffer& operator=(std::span<T> elements) {
         _resize(elements.size());
         std::ranges::copy(elements, _ptr);
-
-        return *this;
-    }
-
-    constexpr avx_buffer(const avx_buffer& other) : avx_buffer { other._count } {
-        std::ranges::copy(other, _ptr);
-    }
-
-    constexpr avx_buffer& operator=(const avx_buffer& other) {
-        _resize(other._count);
-        std::ranges::copy(other, _ptr);
-
-        return *this;
-    }
-
-    constexpr avx_buffer(avx_buffer&& other) noexcept
-        : _count { std::exchange(other._count, 0) }
-        , _ptr { std::exchange(other._ptr, nullptr) } { }
-
-    constexpr avx_buffer& operator=(avx_buffer&& other) noexcept {
-        clear();
-
-        _count = std::exchange(other._count, 0);
-        _ptr = std::exchange(other._ptr, nullptr);
 
         return *this;
     }

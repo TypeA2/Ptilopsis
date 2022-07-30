@@ -375,3 +375,106 @@ void rv_generator_avx::isn_cnt() {
         epi32::store(func_ends.m256i(i), start + size);
     }
 }
+
+void rv_generator_avx::isn_gen() {
+    using enum rv_node_type;
+
+    // TODO how realistic is SIMD'ing this? Sorting and removing takes ~8% of the original isn_gen time
+    auto idx_array = avx_buffer<uint32_t>::iota(nodes);
+    std::ranges::sort(idx_array, std::ranges::less {}, [this](uint32_t i) {
+        return depth[i];
+    });
+
+    auto depth_starts = avx_buffer<uint32_t>::iota(nodes);
+
+    auto removed = std::ranges::remove_if(depth_starts, [this, &idx_array](uint32_t i) {
+        return !(i == 0 || depth[idx_array[i]] != depth[idx_array[i - 1]]);
+    });
+
+    depth_starts.shrink_to(std::distance(depth_starts.begin(), removed.begin()));
+
+    uint32_t word_count = node_locations.back();
+
+    /* Back to AVX... */
+    avx_buffer<uint32_t> registers { nodes * parent_idx_per_node };
+    instr = avx_buffer<uint32_t> { word_count };
+    rd_avx = avx_buffer<uint32_t> { word_count };
+    rs1_avx = avx_buffer<uint32_t> { word_count };
+    rs2_avx = avx_buffer<uint32_t> { word_count };
+    jt_avx = avx_buffer<uint32_t> { word_count };
+
+    for (uint32_t i = 0; i < max_depth + 1; ++i) {
+        uint32_t current_depth = static_cast<uint32_t>(max_depth) - i;
+
+        uint32_t start_idx = depth_starts[current_depth];
+        uint32_t end_idx = (current_depth == max_depth) ? static_cast<uint32_t>(nodes) : depth_starts[current_depth + 1];
+
+        uint32_t level_size = end_idx - start_idx;
+        uint32_t level_steps = (level_size + 1) / 2;
+
+        bool is_uneven = level_size & 1;
+
+        /* Every node can produce up to 4 instructions, we can work on 4 integers at a time, so work in steps of 2 instructions */
+        for (uint32_t j = 0; j < level_steps; ++j) {
+            bool skip_last = is_uneven && (level_steps == j + 1);
+            uint32_t idx_0 = idx_array[start_idx + (2 * j)];
+            uint32_t idx_1 = skip_last ? idx_0 : idx_array[start_idx + (2 * j) + 1];
+
+            /* lo = idx_0, hi = idx_1*/
+            __m256i indices = _mm256_set_m128i(_mm_set1_epi32(idx_1), _mm_set1_epi32(idx_0));
+            const __m256i iota = _mm256_broadcastsi128_si256(_mm_set_epi32(3 * data_type_count, 2 * data_type_count, data_type_count, 0));
+
+            // TODO this as a cached load or maybe only perform 2 loads and shuffle?
+            __m256i result_types = epi32::gather(this->result_types.data(), indices);
+
+            // TODO is gather even faster than 2 individual loads here?
+            __m256i has_instr_indices = epi32::gather(this->node_types.data(), indices);
+            has_instr_indices = has_instr_indices * (data_type_count * 4);
+            has_instr_indices = has_instr_indices + iota + result_types;
+
+            // TODO masking SHOULD be faster:
+            // Hopefully the gather caches the first 4 elements, but still this would be >1 (likely ~4-5 for L1d) cycles of latency
+            // _mm256_or_si256 has a latency of 1 and CPI of 0.33, so should be faster than a cached data access.
+            // Question is whether this holds for larger datasets...
+            const __m128i mask_true = _mm_set1_epi32(0xFFFFFFFF);
+            __m256i has_inst_load_mask = _mm256_set_m128i(skip_last ? _mm_setzero_si128() : mask_true, mask_true);
+            __m256i has_instr_mask = epi32::maskgatherz(has_instr_mapping.data(), has_instr_indices, has_inst_load_mask);
+
+            /* If no instruction, and i == 0, propagate data */
+            __m256i propagate_data_mask = ~has_instr_mask & epi32::from_values(-1, 0, 0, 0, skip_last ? 0 : -1, 0, 0, 0);
+            if (!epi32::is_zero(propagate_data_mask)) {
+                // TODO should probably hide this behind a func that takes a mask
+                __m256i parents = epi32::maskgatherz(this->parents.data(), indices, propagate_data_mask);
+                /* parent == -1 just means we get a 0, which is a node type we don't test for anyway */
+                __m256i parent_types = epi32::maskgatherz(this->node_types.data(), parents, propagate_data_mask);
+                __m256i child_idx = epi32::maskgatherz(this->child_idx.data(), indices, propagate_data_mask);
+
+                /* There should only ever be 1 of this, don't worry too much */
+                __m256i no_parent_mask = (parents == -1);
+
+                /* The nodes that are their parent node's conditional node */
+                __m256i conditionals_mask = ((parent_types & epi32::from_enum(if_statement)) == epi32::from_enum(if_statement));
+                conditionals_mask = conditionals_mask & (child_idx == (parent_types & 1));
+
+                /* Mask of nodes that correspond to a simple parent_arg_idx call */
+                __m256i parent_arg_idx_mask = conditionals_mask | no_parent_mask;
+
+                /* If it's not in the parent_arg_idx_mask then there's a sub call to do first */
+                __m256i sub_call_mask = ~parent_arg_idx_mask & propagate_data_mask;
+                if (!epi32::is_zero(sub_call_mask)) {
+                    /* has_instr_mapping has the same shape as parent_arg_idx_lookup, so re-use indices */
+                    __m256i calc_type = epi32::maskgatherz(parent_arg_idx_lookup.data(), has_instr_indices, sub_call_mask);
+                    parent_arg_idx_mask = parent_arg_idx_mask | (calc_type == 1);
+
+                    /* >1 means it has a return value */
+                    parent_arg_idx_mask = parent_arg_idx_mask | ((calc_type == 2) & (result_types > 1));
+                }
+
+                __m256i result_indices = (parents * parent_idx_per_node) + child_idx;
+                result_indices = result_indices & parent_arg_idx_mask;
+
+                // TODO: parent_indices[instr_idx] = get_parent_arg_idx if i == 0 OR if has_instr_mask for that instr
+            }
+        }
+    }
+}
