@@ -429,8 +429,8 @@ void rv_generator_avx::isn_gen() {
             __m256i result_types = epi32::gather(this->result_types.data(), indices);
 
             // TODO is gather even faster than 2 individual loads here?
-            __m256i has_instr_indices = epi32::gather(this->node_types.data(), indices);
-            has_instr_indices = has_instr_indices * (data_type_count * 4);
+            __m256i node_types = epi32::gather(this->node_types.data(), indices);
+            __m256i has_instr_indices = node_types * (data_type_count * 4);
             has_instr_indices = has_instr_indices + iota + result_types;
 
             // TODO masking SHOULD be faster:
@@ -443,49 +443,46 @@ void rv_generator_avx::isn_gen() {
 
             /* If has_instr OR if i == 0, propagate data */
             __m256i propagate_data_mask = (has_instr_mask | epi32::from_values(-1, 0, 0, 0, skip_last ? 0 : -1, 0, 0, 0));
-            __m256i parent_arg_idx;
-            __m256i parent_arg_idx_call_mask;
             /* Never 0, since the first value will always be propagated */
-            {
-                __m256i parents = epi32::maskgatherz(this->parents.data(), indices, propagate_data_mask);
-                __m256i no_parent_mask = (parents == -1);
-                __m256i load_from_parents_mask = (~no_parent_mask & propagate_data_mask);
-                __m256i parent_types = epi32::maskgatherz(this->node_types.data(), parents, load_from_parents_mask);
+            
+            __m256i parents = epi32::maskgatherz(this->parents.data(), indices, propagate_data_mask);
+            __m256i no_parent_mask = (parents == -1);
+            __m256i load_from_parents_mask = (~no_parent_mask & propagate_data_mask);
+            __m256i parent_types = epi32::maskgatherz(this->node_types.data(), parents, load_from_parents_mask);
 
-                /* child_idx value of all non-parentless nodes */
-                __m256i child_idx = epi32::maskgatherz(this->child_idx.data(), indices, load_from_parents_mask);
+            /* child_idx value of all non-parentless nodes */
+            __m256i child_idx = epi32::maskgatherz(this->child_idx.data(), indices, load_from_parents_mask);
                 
-                /* Non-conditional nodes of branching instructions */
-                __m256i non_conditionals_mask = ((parent_types & epi32::from_enum(if_statement)) == epi32::from_enum(if_statement));
-                non_conditionals_mask = non_conditionals_mask & ~(child_idx == (parent_types & 1));
+            /* Non-conditional nodes of branching instructions */
+            __m256i non_conditionals_mask = ((parent_types & epi32::from_enum(if_statement)) == epi32::from_enum(if_statement));
+            non_conditionals_mask = non_conditionals_mask & ~(child_idx == (parent_types & 1));
 
-                /* Mask for which nodes to call parent_arg_idx on, at least on non-conditionals */
-                parent_arg_idx_call_mask = non_conditionals_mask;
+            /* Mask for which nodes to call parent_arg_idx on, at least on non-conditionals */
+            __m256i parent_arg_idx_call_mask = non_conditionals_mask;
 
-                /* Load parent_arg_idx_lookup for parentless or conditional nodes */
-                __m256i parent_arg_idx_lookup_load_mask = (no_parent_mask | ~non_conditionals_mask) & propagate_data_mask;
-                if (!epi32::is_zero(parent_arg_idx_lookup_load_mask)) {
-                    /* Same shape as has_instr_mapping */
-                    __m256i calc_type = epi32::maskgatherz(parent_arg_idx_lookup.data(), has_instr_indices, parent_arg_idx_lookup_load_mask);
+            /* Load parent_arg_idx_lookup for parentless or conditional nodes */
+            __m256i parent_arg_idx_lookup_load_mask = (no_parent_mask | ~non_conditionals_mask) & propagate_data_mask;
+            if (!epi32::is_zero(parent_arg_idx_lookup_load_mask)) {
+                /* Same shape as has_instr_mapping */
+                __m256i calc_type = epi32::maskgatherz(parent_arg_idx_lookup.data(), has_instr_indices, parent_arg_idx_lookup_load_mask);
 
-                    /* calc_type == 1 means a sub-call */
-                    parent_arg_idx_call_mask = parent_arg_idx_call_mask | (calc_type == 1);
+                /* calc_type == 1 means a sub-call */
+                parent_arg_idx_call_mask = parent_arg_idx_call_mask | (calc_type == 1);
 
-                    /* If result_type > 1 for calc_type 2, also call */
-                    __m256i calc_type_2_mask = (calc_type == 2);
-                    if (!epi32::is_zero(calc_type_2_mask)) {
-                        __m256i result_types = epi32::maskgatherz(this->result_types.data(), indices, calc_type_2_mask);
-                        parent_arg_idx_call_mask = parent_arg_idx_call_mask | (result_types > 1);
-                    }
+                /* If result_type > 1 for calc_type 2, also call */
+                __m256i calc_type_2_mask = (calc_type == 2);
+                if (!epi32::is_zero(calc_type_2_mask)) {
+                    __m256i result_types = epi32::maskgatherz(this->result_types.data(), indices, calc_type_2_mask);
+                    parent_arg_idx_call_mask = parent_arg_idx_call_mask | (result_types > 1);
                 }
-
-                /* For all nodes in parent_arg_idx_call_mask... */
-                parent_arg_idx = ((parents * parent_idx_per_node) + child_idx) & parent_arg_idx_call_mask;
-                parent_arg_idx = parent_arg_idx | (epi32::from_value(-1) & ~parent_arg_idx_call_mask);
             }
-             
 
-            __m256i instr_in_buf = epi32::from_values(0, 1, 2, 3, 0, 1, 2, 3) + epi32::maskgatherz(this->node_locations.data(), indices, has_instr_mask);
+            /* For all nodes in parent_arg_idx_call_mask... */
+            __m256i parent_arg_idx = ((parents * parent_idx_per_node) + child_idx) & parent_arg_idx_call_mask;
+            parent_arg_idx = parent_arg_idx | (epi32::from_value(-1) & ~parent_arg_idx_call_mask);
+            
+            /* Last argument to get_data_prop_value */
+            __m256i instr_in_buf = epi32::from_values(0, 1, 2, 3, 0, 1, 2, 3) + epi32::maskgatherz(this->node_locations.data(), indices, propagate_data_mask);
             __m256i rd = epi32::zero();
 
             /* Calculate get_data_prop_value */
@@ -523,7 +520,25 @@ void rv_generator_avx::isn_gen() {
                 rd = rd | ((instr_in_buf + 64) & has_output_val_mask);
             }
 
-            
+            /* Use rd unless node is the non-conditional node of a if/else/while, in which case use instr_no */
+            __m256i use_rd_mask = no_parent_mask | (~non_conditionals_mask & load_from_parents_mask);
+
+            __m256i node_size_mapping_indices = (node_types * data_type_count) + result_types;
+            __m256i instr_no = instr_in_buf + epi32::maskgatherz(node_size_mapping.data(), node_size_mapping_indices, non_conditionals_mask);
+
+            __m256i data_prop_value = (rd & use_rd_mask) | (instr_no & non_conditionals_mask);
+
+            /* Scalar-ly scatter because AVX2... */
+            AVX_ALIGNED auto parent_indices = epi32::extract(parent_arg_idx);
+            AVX_ALIGNED auto new_regs = epi32::extract(data_prop_value);
+
+            AVX_ALIGNED auto indices_tmp = epi32::extract(indices);
+            for (uint32_t k = 0; k < 8; ++k) {
+                // TODO >=0 or extract parent_arg_idx_call_mask too?
+                if (int idx = parent_indices[k]; idx >= 0) {
+                    registers[idx] = new_regs[k];
+                }
+            }
         }
     }
 }
