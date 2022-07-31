@@ -343,10 +343,10 @@ static_assert(sizeof(has_instr_mapping) == (data_type_array_size * max_node_type
 constexpr auto generate_has_output() {
     using enum rv_node_type;
 
-    mapping_helper<std::array<ArrayForTypes<bool>, 4>, max_node_types> res;
+    mapping_helper<std::array<ArrayForTypes<uint32_t>, 4>, max_node_types> res;
 
-    ArrayForTypes<bool> yes { true,  true,  true,  true,  true,  true };
-    ArrayForTypes<bool> no { false, false, false, false, false, false };
+    ArrayForTypes<uint32_t> yes { 0xFFFFFFFF,  0xFFFFFFFF,  0xFFFFFFFF,  0xFFFFFFFF,  0xFFFFFFFF,  0xFFFFFFFF };
+    ArrayForTypes<uint32_t> no { 0, 0, 0, 0, 0, 0 };
 
     res[invalid]        = { no, no, no, no };
     res[statement_list] = { no, no, no, no };
@@ -371,7 +371,7 @@ constexpr auto generate_has_output() {
     res[logic_not_expr] = { no, no, no, no };
     res[neg_expr]       = { no, no, no, no };
 
-    res[literal_expr]     = { yes, {false, false, false, true, false, false}, no, no};
+    res[literal_expr]     = { yes, {0, 0, 0, 0xFFFFFFFF, 0, 0}, no, no};
     res[cast_expr]        = { no,  no, no, no };
     res[deref_expr]       = { no,  no, no, no };
     res[assign_expr]      = { no,  no, no, no };
@@ -391,12 +391,12 @@ constexpr auto generate_has_output() {
     res[while_statement]   = { no, no, no, no };
     res[if_else_statement] = { no, no, no, no };
 
-    res[eq_expr]  = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no};
+    res[eq_expr]  = { ArrayForTypes<uint32_t>{ 0, 0, 0xFFFFFFFF, 0, 0, 0 },  no, no, no};
     res[neq_expr] = { yes, no, no, no };
     res[lt_expr]  = { no,  no, no, no };
     res[gt_expr]  = { no,  no, no, no };
-    res[lte_expr] = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no };
-    res[gte_expr] = { ArrayForTypes<bool>{ false, false, true, false, false, false },  no, no, no };
+    res[lte_expr] = { ArrayForTypes<uint32_t>{ 0, 0, 0xFFFFFFFF, 0, 0, 0 },  no, no, no };
+    res[gte_expr] = { ArrayForTypes<uint32_t>{ 0, 0, 0xFFFFFFFF, 0, 0, 0 },  no, no, no };
 
     res[func_arg]                   = { no,  no, no, no };
     res[func_arg_float_as_int]      = { no,  no, no, no };
@@ -410,6 +410,8 @@ constexpr auto generate_has_output() {
 
 constexpr auto has_output = generate_has_output();
 
+static_assert(sizeof(has_output) == (data_type_array_size * max_node_types * 4),
+    "has_output has unexpected size");
 
 /* NODE_GET_PARENT_ARG_IDX_LOOKUP */
 
@@ -490,9 +492,9 @@ static_assert(sizeof(parent_arg_idx_lookup) == (data_type_array_size * max_node_
 constexpr auto generate_get_output_table() {
     using enum rv_node_type;
 
-    mapping_helper<std::array<ArrayForTypes<int8_t>, 4>, max_node_types> res;
+    mapping_helper<std::array<ArrayForTypes<uint32_t>, 4>, max_node_types> res;
 
-    ArrayForTypes<int8_t> zero { 0, 0, 0, 0, 0, 0 };
+    ArrayForTypes<uint32_t> zero { 0, 0, 0, 0, 0, 0 };
 
     res[invalid]        = { zero, zero, zero, zero };
     res[statement_list] = { zero, zero, zero, zero };
@@ -525,7 +527,7 @@ constexpr auto generate_get_output_table() {
     res[id_expr]          = { zero, zero, zero, zero };
     res[while_dummy]      = { zero, zero, zero, zero };
     res[func_decl_dummy]  = { zero, zero, zero, zero };
-    res[return_statement] = { ArrayForTypes<int8_t>{4, 4, 4, 3, 4, 4}, zero, zero, zero };
+    res[return_statement] = { ArrayForTypes<uint32_t>{4, 4, 4, 3, 4, 4}, zero, zero, zero };
 
     res[func_decl]     = { zero, zero, zero, zero };
     res[func_arg_list] = { zero,  zero, zero, zero };
@@ -547,14 +549,17 @@ constexpr auto generate_get_output_table() {
     res[func_arg]                   = { zero, zero, zero, zero };
     res[func_arg_float_as_int]      = { zero, zero, zero, zero };
     res[func_arg_on_stack]          = { zero, zero, zero, zero };
-    res[func_call_arg]              = { ArrayForTypes<int8_t>{0, 0, 1, 2, 0, 0}, zero, zero, zero};
-    res[func_call_arg_float_as_int] = { ArrayForTypes<int8_t>{1, 1, 1, 1, 1, 1}, zero, zero, zero };
+    res[func_call_arg]              = { ArrayForTypes<uint32_t>{0, 0, 1, 2, 0, 0}, zero, zero, zero};
+    res[func_call_arg_float_as_int] = { ArrayForTypes<uint32_t>{1, 1, 1, 1, 1, 1}, zero, zero, zero };
     res[func_call_arg_on_stack]     = { zero, zero, zero, zero };
 
     return res.get();
 }
 
 constexpr auto get_output_table = generate_get_output_table();
+
+static_assert(sizeof(get_output_table) == (data_type_array_size * max_node_types * 4),
+    "get_output_table has unexpected size");
 
 constexpr auto generate_instr_table() {
     using enum rv_node_type;
