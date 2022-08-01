@@ -723,3 +723,108 @@ void rv_generator_avx::isn_gen() {
         }
     }
 }
+
+void rv_generator_avx::optimize() {
+    avx_buffer<uint32_t> used_registers { instr.size() };
+    for (size_t i = 0; i < instr.size_m256i(); ++i) {
+        // TODO cmpeq 0 vs cmpgt -1 shouldn't matter too much, right?
+        AVX_ALIGNED auto rs1_array = epi32::extract(epi32::load(this->rs1_avx.m256i(i)) - 64);
+        AVX_ALIGNED auto rs2_array = epi32::extract(epi32::load(this->rs2_avx.m256i(i)) - 64);
+
+
+        for (uint32_t j = 0; j < 8; ++j) {
+            if (int idx = rs1_array[j]; idx >= 0) {
+                used_registers[idx] = 0xFFFFFFFF;
+            }
+        }
+
+        for (uint32_t j = 0; j < 8; ++j) {
+            if (int idx = rs2_array[j]; idx >= 0) {
+                used_registers[idx] = 0xFFFFFFFF;
+            }
+        }
+    }
+
+    bool cont = true;
+    while (cont) {
+        avx_buffer<uint32_t> new_used_registers = used_registers;
+
+        /* Need to be processed in 2 steps to preserve consistency */
+        for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+            const __m256i rd = epi32::load(this->rd_avx.m256i(i));
+
+            /* If rd >= 64, rd - 64 is the instruction index */
+            __m256i can_remove_mask = (rd > 63);
+
+            const __m256i used_mask = epi32::maskgatherz(used_registers.data(), rd - 64, can_remove_mask);
+            can_remove_mask = can_remove_mask & ~used_mask;
+
+            const __m256i rs1_src = epi32::load(this->rs1_avx.m256i(i)) - 64;
+            const __m256i rs2_src = epi32::load(this->rs2_avx.m256i(i)) - 64;
+
+            /* Non-masked entries get set to -1, so won't be used in the scatter operation */
+            __m256i unset = (epi32::from_value(-1) & ~can_remove_mask);
+            AVX_ALIGNED auto indices = epi32::extract((rs1_src & can_remove_mask) | unset);
+
+            /* Scatter */
+            for (uint32_t j = 0; j < 8; ++j) {
+                if (int idx = indices[j]; idx >= 0) {
+                    new_used_registers[idx] = 0;
+                }
+            }
+
+            indices = epi32::extract((rs2_src & can_remove_mask) | unset);
+
+            for (uint32_t j = 0; j < 8; ++j) {
+                if (int idx = indices[j]; idx >= 0) {
+                    new_used_registers[idx] = 0;
+                }
+            }
+        }
+            
+        for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+            const __m256i rs1_src = epi32::load(this->rs1_avx.m256i(i)) - 64;
+            const __m256i rs2_src = epi32::load(this->rs2_avx.m256i(i)) - 64;
+
+            const __m256i instr = epi32::load(this->instr.m256i(i));
+            const __m256i instr_opcode_func3 = (instr & 0b0000000'00000'00000'111'00000'1111111);
+            const __m256i is_store_mask = (instr_opcode_func3 == 0b0000000'00000'00000'010'00000'0100011) | (instr_opcode_func3 == 0b0000000'00000'00000'010'00000'0100111);
+
+            const __m256i unset = (epi32::from_value(-1) & ~is_store_mask);
+            AVX_ALIGNED auto indices = epi32::extract((rs1_src & is_store_mask) | unset);
+
+            for (uint32_t j = 0; j < 8; ++j) {
+                if (int idx = indices[j]; idx >= 0) {
+                    new_used_registers[idx] = 0xFFFFFFFF;
+                }
+            }
+
+            indices = epi32::extract((rs2_src & is_store_mask) | unset);
+
+            for (uint32_t j = 0; j < 8; ++j) {
+                if (int idx = indices[j]; idx >= 0) {
+                    new_used_registers[idx] = 0xFFFFFFFF;
+                }
+            }
+        }
+
+        /* If nothing changed, we're done */
+        if (used_registers == new_used_registers) {
+            cont = false;
+        }
+
+        used_registers = std::move(new_used_registers);
+    }
+
+    used_instrs_avx = avx_buffer<uint32_t> { instr.size() };
+    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+        const __m256i rd = epi32::load(this->rd_avx.m256i(i));
+        const __m256i used_mask = epi32::load(used_registers.m256i(i));
+
+        epi32::store(used_instrs_avx.m256i(i),(~(rd > 63) | used_mask) & 1);
+    }
+}
+
+void rv_generator_avx::regalloc() {
+
+}

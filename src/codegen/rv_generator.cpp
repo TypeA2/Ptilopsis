@@ -141,7 +141,7 @@ void rv_generator_st::process() {
     time("preprocess", &rv_generator_st::preprocess);
     time("isn_cnt", &rv_generator_st::isn_cnt);
     time("isn_gen", &rv_generator_st::isn_gen);
-    //time("optimize", &rv_generator_st::optimize);
+    time("optimize", &rv_generator_st::optimize);
     //time("regalloc", &rv_generator_st::regalloc);
     //time("fix_jumps", &rv_generator_st::fix_jumps);
     //time("postprocess", &rv_generator_st::postprocess);
@@ -598,7 +598,7 @@ void rv_generator_st::isn_gen() {
              * 
              */
 
-            
+            //std::cout << idx << ": ";
             // registers is the propagation buffer, a copy is used for each compile_node, and then it's updated
             // after each level
             for (uint32_t i = 0; i < 4; ++i, ++instr_idx) {
@@ -695,7 +695,7 @@ void rv_generator_st::isn_gen() {
                     parent_indices[instr_idx] = static_cast<int32_t>(get_parent_arg_idx(static_cast<uint32_t>(idx), i));
                     current_instructions[instr_idx] = instr_table[as_index(node_type)][i][as_index(data_type)];
                     current_instructions[instr_idx] |= instr_constant(node_type, node_data[idx], i);
-
+                    
                     auto node_get_instr_arg = [this](uint32_t node, avx_buffer<int64_t>& registers,
                         int64_t arg_no, int64_t instr_in_buf, int64_t relative_offset) -> int64_t {
                         auto calc_type = operand_table[as_index(node_types[node])][relative_offset][as_index(result_types[node])][arg_no];
@@ -762,7 +762,9 @@ void rv_generator_st::isn_gen() {
                     current_instructions[instr_idx] = 0;
                     new_regs[instr_idx] = 0;
                 }
+                //std::cout << instruction_indices[instr_idx] << ' ';
             }
+            //std::cout << '\n';
         }
 
         /* scatter data idx instrs */
@@ -779,6 +781,7 @@ void rv_generator_st::isn_gen() {
         /* scatter registers parent_idx new_regs */
         for (size_t i = 0; i < (level_size * 4); ++i) {
             if (parent_indices[i] >= 0 && parent_indices[i] < static_cast<int64_t>(registers.size())) {
+                //std::cout << parent_indices[i] << " -> " << new_regs[i] << '\n';
                 registers[parent_indices[i]] = new_regs[i];
             }
         }
@@ -826,6 +829,7 @@ void rv_generator_st::optimize() {
 
     bool cont = true;
     while (cont) {
+        //std::cout << used_registers[38] << '\n';
         auto used_registers_cpy = used_registers;
         avx_buffer<int64_t> newly_used { instructions.size() * 2 };
         for (size_t i = 0; i < instructions.size(); ++i) {
@@ -856,8 +860,6 @@ void rv_generator_st::optimize() {
             }
         }
 
-        //std::cout << "sideeffects: " << side_effect_correct << '\n';
-
         auto result = new_used_registers;
         for (size_t i = 0; i < side_effect_correct.size(); ++i) {
             if (side_effect_correct[i] >= 0 && side_effect_correct[i] < static_cast<int64_t>(result.size())) {
@@ -876,11 +878,10 @@ void rv_generator_st::optimize() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         used_instrs[i] = rd[i] < 64 || used_registers[i];
     }
-   // dump_instrs();
 }
 
 void rv_generator_st::regalloc() {
-    //dump_instrs();
+    dump_instrs();
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
     stack_sizes = avx_buffer<uint32_t>::zero(func_count);
