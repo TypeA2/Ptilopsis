@@ -83,8 +83,8 @@ class rv_generator_st : public rv_generator {
 
     void process() override;
 
-    private:
-    void dump_instrs();
+    protected:
+    virtual void dump_instrs();
 
     virtual void preprocess();
     virtual void isn_cnt();

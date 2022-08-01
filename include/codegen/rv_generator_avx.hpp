@@ -14,6 +14,8 @@ class rv_generator_avx : public rv_generator_st {
     avx_buffer<uint32_t> rs2_avx;
     avx_buffer<uint32_t> jt_avx;
 
+    void dump_instrs() override;
+
     void preprocess() override;
     void isn_cnt() override;
     void isn_gen() override;

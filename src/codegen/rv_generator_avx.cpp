@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <bitset>
+#include <iomanip>
 
 #include <magic_enum.hpp>
 
@@ -11,6 +12,24 @@
 using namespace simd::epi32_operators;
 
 namespace epi32 = simd::epi32;
+
+void rv_generator_avx::dump_instrs() {
+    std::cout << rvdisasm::color::extra << " == " << instr.size() << " instructions ==             rd rs1 rs2 jt\n" << rvdisasm::color::white;
+    size_t digits = static_cast<size_t>(std::log10(instr.size()) + 1);
+    for (size_t i = 0; i < instr.size(); ++i) {
+        std::string instr = rvdisasm::instruction(this->instr[i], true);
+        std::cout << rvdisasm::color::extra << std::dec << std::setw(digits) << std::setfill(' ') << i << rvdisasm::color::white << ": " << instr;
+        int64_t pad = std::max<int64_t>(0, 32 - static_cast<int64_t>(instr.size()));
+        for (int64_t j = 0; j < pad; ++j) {
+            std::cout << ' ';
+        }
+
+        std::cout << std::setw(2) << std::setfill(' ') << rd_avx[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs1_avx[i] << ' '
+            << std::setw(2) << std::setfill(' ') << rs2_avx[i] << ' '
+            << std::setw(2) << std::setfill(' ') << jt_avx[i] << '\n';
+    }
+}
 
 void rv_generator_avx::preprocess() {
     using enum rv_node_type;
@@ -611,6 +630,19 @@ void rv_generator_avx::isn_gen() {
                 instr_words = instr_words | (_mm256_slli_epi32(node_data_mul4 * -1, 20) & (calc_type == 5));
             }
 
+            AVX_ALIGNED auto has_instr_mask_array = epi32::extract(has_instr_mask);
+            AVX_ALIGNED auto instr_loc_array = epi32::extract(instr_loc);
+            AVX_ALIGNED auto instr_words_array = epi32::extract(instr_words);
+            AVX_ALIGNED auto rd_array = epi32::extract(rd);
+
+            for (uint32_t k = 0; k < 8; ++k) {
+                if (has_instr_mask_array[k]) {
+                    instr[instr_loc_array[k]] = instr_words_array[k];
+                    rd_avx[instr_loc_array[k]] = rd_array[k];
+                }
+            }
         }
     }
+
+    dump_instrs();
 }
