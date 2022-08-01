@@ -605,14 +605,15 @@ void rv_generator_avx::isn_gen() {
             /* Gather actual instruction words */
             __m256i instr_words = epi32::maskgatherz(instr_table.data(), has_instr_indices, has_instr_mask);
 
+            /* Re-used for jt */
+            const __m256i instr_constant_indices = (node_types * 4) + relative_offset;
+
+            // TODO node data is loaded once previously, not needed?
+            /* Load all node data of nodes with calc_type != 0 */
+            const __m256i node_data = epi32::maskgatherz(this->node_data.data(), indices, has_instr_mask);
             {
                 /* Calculate instruction constants */
-                const __m256i instr_constant_indices = (node_types * 4) + relative_offset;
                 const __m256i calc_type = epi32::maskgatherz(instr_constant_table.data(), instr_constant_indices, has_instr_mask);
-
-                // TODO node data is loaded once previously, not needed?
-                /* Load all node data of nodes with calc_type != 0 */
-                const __m256i node_data = epi32::maskgatherz(this->node_data.data(), indices, ~(calc_type == 0) & has_instr_mask);
 
                 /* lui -> upper 20 bits of the constant, don't mode */
                 instr_words = instr_words | ((node_data & epi32::from_value(0xFFFFF000)) & (calc_type == 1));
@@ -630,15 +631,54 @@ void rv_generator_avx::isn_gen() {
                 instr_words = instr_words | (_mm256_slli_epi32(node_data_mul4 * -1, 20) & (calc_type == 5));
             }
 
+            /* Calculate jump targets*/
+            __m256i jump_targets = epi32::zero();
+            {
+                const __m256i calc_type = epi32::maskgatherz(instr_jt_table.data(), instr_constant_indices, has_instr_mask);
+
+                /* calc_types 1-5 load from registers array*/
+                const __m256i use_registers_mask = (~(calc_type > 5) & (calc_type > 0));
+                
+                /* idx * 3 + 1 for 1 and 2, +2 for 3 and 4 */
+                const __m256i register_indices = (indices * parent_idx_per_node) + 1 + (1_m256i & (calc_type > 2));
+                if (!epi32::is_zero(register_indices)) {
+                    __m256i register_vals = epi32::maskgatherz(registers.data(), register_indices, use_registers_mask);
+
+                    /* If calc_type is even (lowest bit is 0), add 1 */
+                    register_vals = register_vals + (1_m256i & ((calc_type & 1) == epi32::zero()));
+
+                    jump_targets = register_vals & use_registers_mask;
+                }
+
+                /* for 6 and 7, use func_ends and func_starts respectively */
+                const __m256i use_func_ends_mask = (calc_type == 6);
+                if (!epi32::is_zero(use_func_ends_mask)) {
+                    const __m256i func_ends_vals = epi32::maskgatherz(this->func_ends.data(), node_data, use_func_ends_mask);
+
+                    jump_targets = jump_targets | ((func_ends_vals - 6) & use_func_ends_mask);
+                }
+
+                const __m256i use_func_starts_mask = (calc_type == 7);
+                if (!epi32::is_zero(use_func_starts_mask)) {
+                    const __m256i func_starts_vals = epi32::maskgatherz(this->func_starts.data(), node_data, use_func_starts_mask);
+
+                    jump_targets = jump_targets | (func_starts_vals & use_func_starts_mask);
+                }
+            }
+
             AVX_ALIGNED auto has_instr_mask_array = epi32::extract(has_instr_mask);
             AVX_ALIGNED auto instr_loc_array = epi32::extract(instr_loc);
             AVX_ALIGNED auto instr_words_array = epi32::extract(instr_words);
             AVX_ALIGNED auto rd_array = epi32::extract(rd);
+            AVX_ALIGNED auto jt_array = epi32::extract(jump_targets);
 
             for (uint32_t k = 0; k < 8; ++k) {
                 if (has_instr_mask_array[k]) {
-                    instr[instr_loc_array[k]] = instr_words_array[k];
-                    rd_avx[instr_loc_array[k]] = rd_array[k];
+                    uint32_t idx = instr_loc_array[k];
+                    instr[idx] = instr_words_array[k];
+                    rd_avx[idx] = rd_array[k];
+
+                    jt_avx[idx] = jt_array[k];
                 }
             }
         }

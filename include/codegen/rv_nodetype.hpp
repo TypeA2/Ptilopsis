@@ -932,7 +932,6 @@ constexpr auto instr_constant_table = generate_instr_constant_table();
 static_assert(sizeof(instr_constant_table) == (max_node_types * 4 * sizeof(uint32_t)),
     "instr_constant_table has unexpected size");
 
-
 constexpr auto generate_operand_table() {
     using enum rv_node_type;
 
@@ -1015,9 +1014,9 @@ constexpr auto operand_table = generate_operand_table();
 constexpr auto generate_instr_jt_table() {
     using enum rv_node_type;
 
-    mapping_helper<std::array<int8_t, 4>, max_node_types> res;
+    mapping_helper<std::array<uint32_t, 4>, max_node_types> res;
 
-    std::array<int8_t, 4> zero { 0, 0, 0, 0 };
+    std::array<uint32_t, 4> zero { 0, 0, 0, 0 };
 
     res[invalid]        = zero;
     res[statement_list] = zero;
@@ -1080,6 +1079,9 @@ constexpr auto generate_instr_jt_table() {
 }
 
 constexpr auto instr_jt_table = generate_instr_jt_table();
+
+static_assert(sizeof(instr_jt_table) == (max_node_types * 4 * sizeof(uint32_t)),
+    "instr_jt_table has unexpected size");
 
 constexpr rv_node_type pareas_to_rv_nodetype[] {
     /* [NodeType::INVALID]            = */ rv_node_type::invalid,
