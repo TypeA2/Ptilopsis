@@ -546,7 +546,7 @@ void rv_generator_avx::isn_gen() {
             /* Default to instr_in_buf */
             __m256i instr_loc = instr_in_buf & has_instr_mask;
 
-            // TODO is this faster? could be
+            // TODO is this faster than a set_epi32? could be
             const __m256i relative_offset_1_mask = (relative_offset == 1);
             const __m256i if_else_mask = relative_offset_1_mask & (node_types == epi32::from_enum(if_else_statement));
             const __m256i while_mask = relative_offset_1_mask & (node_types == epi32::from_enum(while_statement));
@@ -555,8 +555,10 @@ void rv_generator_avx::isn_gen() {
                 __m256i register_indices = indices * parent_idx_per_node;
                 register_indices = register_indices + (1_m256i & if_else_mask) + (2_m256i & while_mask);
 
+                const __m256i load_from_reg_mask = if_else_mask | while_mask;
+
                 /* Replace by registers if any are present */
-                instr_loc = epi32::maskgatherz(registers.data(), register_indices, if_else_mask | while_mask);
+                instr_loc = (instr_loc & ~load_from_reg_mask) | epi32::maskgatherz(registers.data(), register_indices, load_from_reg_mask);
             }
 
             /* func_decl or >=2 func_decl_dummy*/
@@ -579,9 +581,6 @@ void rv_generator_avx::isn_gen() {
                     instr_loc = instr_loc + (prev_child_idx & func_call_arg_mask);
                 }
             }
-
-            // TODO almost
-            std::cout << format<32, true>(instr_loc + (epi32::from_value(-1) & ~has_instr_mask)) << "\n";
         }
     }
 }
