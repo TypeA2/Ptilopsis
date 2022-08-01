@@ -6,6 +6,7 @@
 #include <magic_enum.hpp>
 
 #include "simd.hpp"
+#include "disassembler.h"
 
 using namespace simd::epi32_operators;
 
@@ -581,6 +582,35 @@ void rv_generator_avx::isn_gen() {
                     instr_loc = instr_loc + (prev_child_idx & func_call_arg_mask);
                 }
             }
+
+            /* Gather actual instruction words */
+            __m256i instr_words = epi32::maskgatherz(instr_table.data(), has_instr_indices, has_instr_mask);
+
+            {
+                /* Calculate instruction constants */
+                const __m256i instr_constant_indices = (node_types * 4) + relative_offset;
+                const __m256i calc_type = epi32::maskgatherz(instr_constant_table.data(), instr_constant_indices, has_instr_mask);
+
+                // TODO node data is loaded once previously, not needed?
+                /* Load all node data of nodes with calc_type != 0 */
+                const __m256i node_data = epi32::maskgatherz(this->node_data.data(), indices, ~(calc_type == 0) & has_instr_mask);
+
+                /* lui -> upper 20 bits of the constant, don't mode */
+                instr_words = instr_words | ((node_data & epi32::from_value(0xFFFFF000)) & (calc_type == 1));
+                /* addi -> lower 12 bits, shifted left by 20 */
+                instr_words = instr_words | (_mm256_slli_epi32(node_data & epi32::from_value(0xFFF), 20) & (calc_type == 2));
+
+                /* Multiple ones use node_data*4, pre-calculate */
+                // TODO leftshift?
+                const __m256i node_data_mul4 = node_data * 4;
+                /* func call arg list, (-4 * (node_data + 2)) << 20 -> (-1 * (node_data_mul4 + 8)) << 20 */
+                instr_words = instr_words | (_mm256_slli_epi32((node_data_mul4 + 8) * -1, 20) & (calc_type == 3));
+                /* Func arg on stack */
+                instr_words = instr_words | (_mm256_slli_epi32(node_data_mul4, 20) & (calc_type == 4));
+                /* func arg list */
+                instr_words = instr_words | (_mm256_slli_epi32(node_data_mul4 * -1, 20) & (calc_type == 5));
+            }
+
         }
     }
 }
