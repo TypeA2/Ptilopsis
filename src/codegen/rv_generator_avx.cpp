@@ -548,18 +548,6 @@ void rv_generator_avx::isn_gen() {
 
             const __m256i data_prop_value = (rd & use_rd_mask) | (instr_no & non_conditionals_mask);
 
-            /* Scalar-ly scatter because AVX2... */
-            AVX_ALIGNED auto parent_indices = epi32::extract(parent_arg_idx);
-            AVX_ALIGNED auto new_regs = epi32::extract(data_prop_value);
-
-            // TODO does scattering here cause issues? possibly need to wait till end of loop or level
-            for (uint32_t k = 0; k < 8; ++k) {
-                // TODO >=0 or extract parent_arg_idx_call_mask too?
-                if (int idx = parent_indices[k]; idx >= 0) {
-                    registers[idx] = new_regs[k];
-                }
-            }
-
             // TODO this value is loaded a few times, is that needed, or are we being nicer to the compiler
             const __m256i relative_offset = epi32::from_values(0, 1, 2, 3, 0, 1, 2, 3);
 
@@ -666,10 +654,48 @@ void rv_generator_avx::isn_gen() {
                 }
             }
 
+            /* Calculate rs1 and rs2 */
+            __m256i rs1 = epi32::zero();
+            __m256i rs2 = epi32::zero();
+            {
+                // TODO convert to uint16_t array and merge gather calls?
+                for (uint32_t i = 0; i < 2; ++i) {
+                    const __m256i operand_table_indices = (has_instr_indices * 2) + i;
+                    const __m256i calc_type = epi32::maskgatherz(operand_table.data(), operand_table_indices, has_instr_mask);
+
+                    __m256i instr_arg = epi32::zero();
+
+                    // TODO reorder to be more efficient?
+                    const __m256i calc_type_1_mask = (calc_type == 1);
+                    const __m256i calc_type_4_mask = (calc_type == 4);
+                    const __m256i calc_type_5_mask = (calc_type == 5);
+                    const __m256i calc_type_6_mask = (calc_type == 6);
+                    const __m256i use_registers_mask = calc_type_1_mask | calc_type_4_mask | calc_type_5_mask | calc_type_6_mask;
+                    if (!epi32::is_zero(use_registers_mask)) {
+                        __m256i register_indices = indices * parent_idx_per_node;
+                        register_indices = register_indices + (epi32::from_value(i) & calc_type_1_mask);
+                        register_indices = register_indices + (1_m256i & (calc_type_4_mask | calc_type_5_mask));
+                        register_indices = register_indices - (epi32::from_value(i) & calc_type_5_mask);
+
+                        instr_arg = epi32::maskgatherz(registers.data(), register_indices, use_registers_mask);
+                    }
+
+                    instr_arg = instr_arg | ((node_data + 10) & (calc_type == 2)) | ((node_data + 42) & (calc_type == 3)) | ((instr_in_buf + 63) & (calc_type == 7));
+
+                    if (i == 0) {
+                        rs1 = instr_arg;
+                    } else {
+                        rs2 = instr_arg;
+                    }
+                }
+            }
+
             AVX_ALIGNED auto has_instr_mask_array = epi32::extract(has_instr_mask);
             AVX_ALIGNED auto instr_loc_array = epi32::extract(instr_loc);
             AVX_ALIGNED auto instr_words_array = epi32::extract(instr_words);
             AVX_ALIGNED auto rd_array = epi32::extract(rd);
+            AVX_ALIGNED auto rs1_array = epi32::extract(rs1);
+            AVX_ALIGNED auto rs2_array = epi32::extract(rs2);
             AVX_ALIGNED auto jt_array = epi32::extract(jump_targets);
 
             for (uint32_t k = 0; k < 8; ++k) {
@@ -677,12 +703,23 @@ void rv_generator_avx::isn_gen() {
                     uint32_t idx = instr_loc_array[k];
                     instr[idx] = instr_words_array[k];
                     rd_avx[idx] = rd_array[k];
-
+                    rs1_avx[idx] = rs1_array[k];
+                    rs2_avx[idx] = rs2_array[k];
                     jt_avx[idx] = jt_array[k];
+                }
+            }
+
+            /* Scalar-ly scatter because AVX2... */
+            AVX_ALIGNED auto parent_indices = epi32::extract(parent_arg_idx);
+            AVX_ALIGNED auto new_regs = epi32::extract(data_prop_value);
+
+            // TODO does scattering here cause issues? possibly need to wait till end of loop or level
+            for (uint32_t k = 0; k < 8; ++k) {
+                // TODO >=0 or extract parent_arg_idx_call_mask too?
+                if (int idx = parent_indices[k]; idx >= 0) {
+                    registers[idx] = new_regs[k];
                 }
             }
         }
     }
-
-    dump_instrs();
 }

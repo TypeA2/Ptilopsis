@@ -935,7 +935,7 @@ static_assert(sizeof(instr_constant_table) == (max_node_types * 4 * sizeof(uint3
 constexpr auto generate_operand_table() {
     using enum rv_node_type;
 
-    using arg_pair = std::array<int8_t, 2>;
+    using arg_pair = std::array<uint32_t, 2>;
 
     mapping_helper<std::array<ArrayForTypes<arg_pair>, 4>, max_node_types> res;
 
@@ -1010,6 +1010,9 @@ constexpr auto generate_operand_table() {
 }
 
 constexpr auto operand_table = generate_operand_table();
+
+static_assert(sizeof(operand_table) == (max_node_types * 4 * data_type_array_size * 2),
+    "operand_table has unexpected size");
 
 constexpr auto generate_instr_jt_table() {
     using enum rv_node_type;
