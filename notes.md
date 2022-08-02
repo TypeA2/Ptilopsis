@@ -6,3 +6,7 @@ scalar performance drop after 200M elements
 lock contention with atomics
 multithread with shift is only reasonably faster at low (<4) thread counts
 both optimized multithreaded approaches perform roughly the same
+
+# TODO
+Prefix sum primitive
+Scatter primitive

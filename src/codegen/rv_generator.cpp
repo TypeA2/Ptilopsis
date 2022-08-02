@@ -925,7 +925,7 @@ void rv_generator_st::regalloc() {
 
     auto get_symbol_data = [](std::span<symbol_data> symbol_registers, int64_t reg) {
         if (reg < 64) {
-            /* A predetermined register that can't be reassigned*/
+            /* A predetermined register that can't be reassigned */
             return symbol_data { .reg = static_cast<uint8_t>(reg), .swapped = false };
         } else {
             /* Data for the virtual register reg */
@@ -980,7 +980,7 @@ void rv_generator_st::regalloc() {
                 }
 
                 if ((new_lifetime_mask & (1ull << i)) != 0) {
-                    /* Copy the virtual-to-physical register mapping of the registers that don't need to be saved */
+                    /* Copy the physical-to-virtual register mapping of the registers that don't need to be saved */
                     res.registers[i] = register_state[i];
                 } else {
                     res.registers[i] = -1;

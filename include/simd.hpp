@@ -279,13 +279,10 @@ namespace simd::epi32_operators {
     }
 
 #ifdef _MSC_VER
-    FORCE_INLINE __m256i operator>(__m256i lhs, __m256i rhs) {
-        return _mm256_cmpgt_epi32(lhs, rhs);
+    FORCE_INLINE __m256i operator~(__m256i lhs) {
+        return _mm256_xor_si256(lhs, 0xFFFFFFFF_m256i);
     }
 
-    FORCE_INLINE __m256i operator==(__m256i lhs, __m256i rhs) {
-        return _mm256_cmpeq_epi32(lhs, rhs);
-    }
 
     FORCE_INLINE __m256i operator&(__m256i lhs, __m256i rhs) {
         return _mm256_and_si256(lhs, rhs);
@@ -299,6 +296,7 @@ namespace simd::epi32_operators {
         return _mm256_xor_si256(lhs, rhs);
     }
 
+
     FORCE_INLINE __m256i operator+(__m256i lhs, __m256i rhs) {
         return _mm256_add_epi32(lhs, rhs);
     }
@@ -311,40 +309,75 @@ namespace simd::epi32_operators {
         return _mm256_mullo_epi32(lhs, rhs);
     }
 
-    FORCE_INLINE __m256i operator~(__m256i lhs) {
-        return _mm256_xor_si256(lhs, 0xFFFFFFFF_m256i);
+
+    FORCE_INLINE __m256i operator>(__m256i lhs, __m256i rhs) {
+        return _mm256_cmpgt_epi32(lhs, rhs);
     }
 
-    FORCE_INLINE __m256i operator>(__m256i lhs, int rhs) {
-        return _mm256_cmpgt_epi32(lhs, _mm256_set1_epi32(rhs));
+    FORCE_INLINE __m256i operator==(__m256i lhs, __m256i rhs) {
+        return _mm256_cmpeq_epi32(lhs, rhs);
     }
 
-    FORCE_INLINE __m256i operator==(__m256i lhs, int rhs) {
-        return _mm256_cmpeq_epi32(lhs, _mm256_set1_epi32(rhs));
+    FORCE_INLINE __m256i operator<(__m256i lhs, __m256i rhs) {
+        return ~((lhs == rhs) | (lhs > rhs));
     }
 
+    FORCE_INLINE __m256i operator<=(__m256i lhs, __m256i rhs) {
+        return ~(lhs > rhs);
+    }
+
+    FORCE_INLINE __m256i operator>=(__m256i lhs, __m256i rhs) {
+        return (lhs == rhs) | (lhs > rhs);
+    }
+
+
+    /* Integer converting operators */
     FORCE_INLINE __m256i operator&(__m256i lhs, int rhs) {
-        return _mm256_and_si256(lhs, _mm256_set1_epi32(rhs));
+        return lhs & _mm256_set1_epi32(rhs);
     }
 
     FORCE_INLINE __m256i operator|(__m256i lhs, int rhs) {
-        return _mm256_or_si256(lhs, _mm256_set1_epi32(rhs));
+        return lhs | _mm256_set1_epi32(rhs);
     }
 
     FORCE_INLINE __m256i operator^(__m256i lhs, int rhs) {
-        return _mm256_xor_si256(lhs, _mm256_set1_epi32(rhs));
+        return lhs ^ _mm256_set1_epi32(rhs);
     }
 
+
     FORCE_INLINE __m256i operator+(__m256i lhs, int rhs) {
-        return _mm256_add_epi32(lhs, _mm256_set1_epi32(rhs));
+        return lhs + _mm256_set1_epi32(rhs);
     }
 
     FORCE_INLINE __m256i operator-(__m256i lhs, int rhs) {
-        return _mm256_sub_epi32(lhs, _mm256_set1_epi32(rhs));
+        return lhs - _mm256_set1_epi32(rhs);
     }
 
     FORCE_INLINE __m256i operator*(__m256i lhs, int rhs) {
-        return _mm256_mullo_epi32(lhs, _mm256_set1_epi32(rhs));
+        return lhs * _mm256_set1_epi32(rhs);
+    }
+
+    
+    FORCE_INLINE __m256i operator>(__m256i lhs, int rhs) {
+        return lhs == _mm256_set1_epi32(rhs);
+    }
+
+    FORCE_INLINE __m256i operator==(__m256i lhs, int rhs) {
+        return lhs == _mm256_set1_epi32(rhs);
+    }
+
+    FORCE_INLINE __m256i operator<(__m256i lhs, int rhs) {
+        const __m256i val = _mm256_set1_epi32(rhs);
+        return ~((lhs == val) | (lhs > val));
+    }
+
+    FORCE_INLINE __m256i operator<=(__m256i lhs, int rhs) {
+        return ~(lhs > _mm256_set1_epi32(rhs));
+    }
+
+    FORCE_INLINE __m256i operator>=(__m256i lhs, int rhs) {
+        const __m256i val = _mm256_set1_epi32(rhs);
+        return (lhs == val) | (lhs > val);
     }
 #endif
 }
@@ -429,5 +462,74 @@ namespace simd::epi32 {
         AVX_ALIGNED std::array<T, 8> res;
         epi32::store(res.data(), a);
         return res;
+    }
+
+    FORCE_INLINE __m256i hi_to_lo(__m256i a) {
+        return _mm256_permute2x128_si256(a, a, 0b1000'0001);
+    }
+
+    FORCE_INLINE __m256i pack64_32(__m256i a, __m256i b) {
+        /* Pack 2 4x64-bit masks into 1 8x32-bit mask
+         *   https://stackoverflow.com/a/69408295/8662472
+         *
+         * First shuffle so we get:
+         *   0 -> lo[0]
+         *   1 -> lo[1]
+         *   2 -> hi[0]
+         *   3 -> hi[1]
+         *   4 -> lo[2]
+         *   5 -> lo[3]
+         *   6 -> hi[2]
+         *   7 -> hi[3]
+         *
+         * Then shuffle in 64-bit pairs to get the correct result mask
+         */
+        const __m256 res = _mm256_shuffle_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), 0b10'00'10'00);
+
+        return _mm256_permute4x64_epi64(_mm256_castps_si256(res), 0b11'01'10'00);
+    }
+}
+
+namespace simd::epi64 {
+    template <typename T>
+    FORCE_INLINE __m256i load(const T* ptr) {
+        return _mm256_load_si256(reinterpret_cast<const __m256i*>(ptr));
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i loadu(const T* ptr) {
+        return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(ptr));
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i maskload(const T* ptr, __m256i mask) {
+        return _mm256_maskload_epi64(reinterpret_cast<const __int64*>(ptr), mask);
+    }
+
+    FORCE_INLINE __m256i from_value(__int64 v) {
+        return _mm256_set1_epi64x(v);
+    }
+
+    FORCE_INLINE __m256i from_values(__int64 a, __int64 b, __int64 c, __int64 d) {
+        return _mm256_set_epi64x(d, c, b, a);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i gather32(const T* base, __m256i vindex) {
+        return _mm256_i32gather_epi64(reinterpret_cast<const int*>(base), vindex, 8);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i maskgather32(__m256i src, const T* base, __m256i vindex, __m256i mask) {
+        return _mm256_mask_i32gather_epi64(src, reinterpret_cast<const __int64*>(base), vindex, mask, 8);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i maskgatherz32(const T* base, __m256i vindex, __m256i mask) {
+        return _mm256_mask_i32gather_epi64(_mm256_setzero_si256(), reinterpret_cast<const __int64*>(base), vindex, mask, 8);
+    }
+
+    FORCE_INLINE __m256i and256(__m256i a, __int64 val) {
+        return _mm256_and_si256(a, from_value(val));
     }
 }

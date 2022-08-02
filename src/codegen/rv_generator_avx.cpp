@@ -12,6 +12,7 @@
 using namespace simd::epi32_operators;
 
 namespace epi32 = simd::epi32;
+namespace epi64 = simd::epi64;
 
 void rv_generator_avx::dump_instrs() {
     std::cout << rvdisasm::color::extra << " == " << instr.size() << " instructions ==             rd rs1 rs2 jt\n" << rvdisasm::color::white;
@@ -831,8 +832,8 @@ void rv_generator_avx::regalloc() {
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
 
     // TODO 2x 32-bit or 1x 64-bit?
-    /* Maps physical (* func_count) to phsyical register */
-    auto register_state = avx_buffer<uint64_t>::fill(func_count * 64, -1);
+    /* Maps physical (* func_count) to virtual register */
+    auto register_state = avx_buffer<uint32_t>::fill(func_count * 64, -1);
 
     /* Current lifetime state (= used registers) of every function */
     auto lifetime_masks = avx_buffer<uint64_t>::fill(func_count, 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00011111);
@@ -846,16 +847,16 @@ void rv_generator_avx::regalloc() {
 
     /* For every instruction... */
     for (uint32_t i = 0; i < max_func_size; ++i) {
-        avx_buffer<uint64_t> original_register_state = register_state;
+        avx_buffer<uint32_t> original_register_state = register_state;
 
         /* For every function... */
-        for (size_t j = 0; j < function_sizes.size_m256i(); ++j) {
-            const __m256i iota = (8_m256i * j) + epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
+        for (uint32_t j = 0; j < function_sizes.size_m256i(); ++j) {
+            const __m256i func_indices = (8_m256i * j) + epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
             const __m256i func_starts = epi32::load(this->func_starts.m256i(j));
             const __m256i func_sizes = epi32::load(this->function_sizes.m256i(j));
 
             /* All 1's, aka -1, if i > size */
-            const __m256i instr_offset = (func_starts + i) | (epi32::from_value(i) > (func_sizes - 1));
+            const __m256i instr_offset = (func_starts + i) | (epi32::from_value(i) >= func_sizes);
 
             /* From lifetime_result for function x:
              *   mask is the lifetime mask after this instruction, gets assigned to lifetime_masks[x]
@@ -866,12 +867,88 @@ void rv_generator_avx::regalloc() {
              *     Mark the symbols contained in these registers as swapped (and update in symbol_registers/symbol_swapped)
              *   registers is used to directly update this functions register_state
              */
-            const __m256i invalid_mask = (instr_offset == -1);
+            const __m256i in_bounds_mask = ~(instr_offset == -1);
             /* For all valid indices, gather whether the instructions are enabled */
-            const __m256i enabled_mask = epi32::maskgatherz(used_instrs_avx.data(), instr_offset, ~invalid_mask);
-            const __m256i disabled_mask = (invalid_mask | ~enabled_mask);
+            const __m256i valid_mask = in_bounds_mask | epi32::maskgatherz(used_instrs_avx.data(), instr_offset, in_bounds_mask);
 
             /* There's always 1 instruction enabled, else we wouldn't be here at all */
+            const __m256i instr = epi32::maskgatherz(this->instr.data(), instr_offset, valid_mask);
+
+            // TODO opcode 1101111 (JAL) is never generated, shoudn't this be JALR?
+            __m256i is_call_mask = (instr == 0b0000000'00000'00000'000'00001'1101111);
+            const __m256i jt = epi32::maskgatherz(this->jt_avx.data(), instr_offset, is_call_mask);
+            const __m256i func_ends = func_starts + func_sizes;
+
+            __m256i lifetime_mask_lo = epi64::load(lifetime_masks.m256i(2 * j));
+            __m256i lifetime_mask_hi = epi64::load(lifetime_masks.m256i((2 * j) + 1));
+
+            /* A call that jumps to outside the current function */
+            is_call_mask = is_call_mask & ((jt < func_starts) | (jt >= func_ends));
+            if (!epi32::is_zero(is_call_mask)) {
+                std::cout << "wow\n";
+                /* For calls, no rd, rs1, rs2 */
+                //const __m256i new_lifetime_mask_lo = ();
+                const __m256i new_lifetime_mask_lo = epi64::and256(lifetime_mask_lo, preserved_register_mask);
+                const __m256i new_lifetime_mask_hi = epi64::and256(lifetime_mask_hi, preserved_register_mask);
+
+                const __m256i spill_mask_lo = epi64::and256(lifetime_mask_lo, ~preserved_register_mask);
+                const __m256i spill_mask_hi = epi64::and256(lifetime_mask_hi, ~preserved_register_mask);
+
+                /* For every register reprsented in the spill masks, if they are spilled, mark them as swapped 
+                 *   Use the register number to index into original_reg_state to obtain the virtual register.
+                 *     Set the symbol to swapped in symbol_swapped.
+                 */
+                for (uint32_t k = 0; k < 64; ++k) {
+                    const __m256i extract_reg_mask = _mm256_sll_epi64(epi64::from_value(1), _mm_set1_epi64x(k));
+                    
+                    /* Whether register k needs to be saved */
+                    const __m256i spilled_mask = epi32::pack64_32((spill_mask_lo & extract_reg_mask) > 0, (spill_mask_hi & extract_reg_mask) > 0);
+ 
+                    /* new_lifetime_mask marks all saved registers at a call as free afterwards */
+                    const __m256i new_lifetime_mask = epi32::pack64_32(
+                        (new_lifetime_mask_lo & extract_reg_mask) > 0, (new_lifetime_mask_hi & extract_reg_mask) > 0);
+
+                    /* Indices into flattened array */
+                    const __m256i register_state_indices = (func_indices * 64) + k;
+
+                    /* If the current physical register is spilled,
+                     * obtain the current virtual register residing in it from original_register_state
+                     */
+                    // TODO this could be if'd out, but then again function calls are somewhat rare
+                    const __m256i virtual_regs = epi32::maskgatherz(
+                        original_register_state.data(),
+                        register_state_indices,
+                        spilled_mask | new_lifetime_mask
+                    );
+                    const __m256i swapped_regs = virtual_regs - 64;
+
+                    /* For all swapped virtual registers, set swapped to true */
+                    const __m256i swapped_indices = (virtual_regs & spilled_mask) | (epi32::from_value(-1) & ~spilled_mask);
+
+                    /* For all spilled reigsters, set swapped to 1 */
+                    AVX_ALIGNED auto swapped_indices_array = epi32::extract(swapped_indices);
+                    for (uint32_t l = 0; l < 8; ++l) {
+                        /* Mark swapped symbols as swapped out */
+                        if (int idx = swapped_indices_array[l]; l >= 0) {
+                            symbol_swapped[idx] = 0xFFFFFFFF;
+                        }
+                    }
+
+                    /* If the register is not free after this instruction, transfer the mapping, else mark as unmapped */
+                    const __m256i transferred_regs = (virtual_regs & new_lifetime_mask) | (epi32::from_value(-1) & ~new_lifetime_mask);
+
+                    AVX_ALIGNED auto transferred_regs_array = epi32::extract(transferred_regs);
+                    AVX_ALIGNED auto register_state_indices_array = epi32::extract(register_state_indices);
+                    for (uint32_t l = 0; l < 8; ++l) {
+                        register_state[register_state_indices_array[l]] = transferred_regs_array[l];
+                    }
+                }
+            }
+
+            const __m256i non_call_mask = ~is_call_mask;
+            if (!epi32::is_zero(non_call_mask)) {
+
+            }
         }
     }
 }
