@@ -142,7 +142,7 @@ void rv_generator_st::process() {
     time("isn_cnt", &rv_generator_st::isn_cnt);
     time("isn_gen", &rv_generator_st::isn_gen);
     time("optimize", &rv_generator_st::optimize);
-    //time("regalloc", &rv_generator_st::regalloc);
+    time("regalloc", &rv_generator_st::regalloc);
     //time("fix_jumps", &rv_generator_st::fix_jumps);
     //time("postprocess", &rv_generator_st::postprocess);
 
@@ -881,7 +881,7 @@ void rv_generator_st::optimize() {
 }
 
 void rv_generator_st::regalloc() {
-    dump_instrs();
+    //dump_instrs();
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
     stack_sizes = avx_buffer<uint32_t>::zero(func_count);
@@ -1154,6 +1154,8 @@ void rv_generator_st::regalloc() {
             old_offsets[j] = current_func_offset(i, function_sizes[j], func_starts[j]);
         }
 
+        //std::cout << old_offsets << '\n';
+
         /* Analyze all instructions we need to analyze */
 
         /* Store a copy of the virtual to physical register mapping from before this instruction */
@@ -1247,7 +1249,7 @@ void rv_generator_st::regalloc() {
         func_start_bools[start] = 1;
     }
 
-    /* Fore very instruction, what function index it belongs to */
+    /* For very instruction, what function index it belongs to */
     auto reverse_func_id_map = avx_buffer<int64_t>::zero(instructions.size());
     std::inclusive_scan(func_start_bools.begin(), func_start_bools.end(), reverse_func_id_map.begin());
     

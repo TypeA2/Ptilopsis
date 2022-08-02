@@ -22,7 +22,7 @@ auto range_to_vec(R&& range) {
 }
 
 template <typename T>
-class avx_buffer {
+class AVX_ALIGNED avx_buffer {
     public:
     using element_type = T;
     using value_type = std::remove_cvref_t<T>;

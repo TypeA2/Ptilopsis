@@ -821,10 +821,57 @@ void rv_generator_avx::optimize() {
         const __m256i rd = epi32::load(this->rd_avx.m256i(i));
         const __m256i used_mask = epi32::load(used_registers.m256i(i));
 
-        epi32::store(used_instrs_avx.m256i(i),(~(rd > 63) | used_mask) & 1);
+        epi32::store(used_instrs_avx.m256i(i), ~(rd > 63) | used_mask);
     }
 }
 
 void rv_generator_avx::regalloc() {
+    /* Process 1 instruction per function at a time, to at least have some parallelism */
+    uint32_t max_func_size = std::ranges::max(function_sizes);
+    uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
 
+    // TODO 2x 32-bit or 1x 64-bit?
+    /* Maps physical (* func_count) to phsyical register */
+    auto register_state = avx_buffer<uint64_t>::fill(func_count * 64, -1);
+
+    /* Current lifetime state (= used registers) of every function */
+    auto lifetime_masks = avx_buffer<uint64_t>::fill(func_count, 0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00011111);
+
+    /* Keeps track what registers need to be preserved if a function call occurs */
+    avx_buffer<uint64_t> preserve_masks { func_count };
+
+    /* For every possible virtual register within our program, keep track of the physical register it's in and whether it's swapped out currently */
+    avx_buffer<uint32_t> symbol_registers { used_instrs.size() };
+    avx_buffer<uint32_t> symbol_swapped { used_instrs.size() };
+
+    /* For every instruction... */
+    for (uint32_t i = 0; i < max_func_size; ++i) {
+        avx_buffer<uint64_t> original_register_state = register_state;
+
+        /* For every function... */
+        for (size_t j = 0; j < function_sizes.size_m256i(); ++j) {
+            const __m256i iota = (8_m256i * j) + epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
+            const __m256i func_starts = epi32::load(this->func_starts.m256i(j));
+            const __m256i func_sizes = epi32::load(this->function_sizes.m256i(j));
+
+            /* All 1's, aka -1, if i > size */
+            const __m256i instr_offset = (func_starts + i) | (epi32::from_value(i) > (func_sizes - 1));
+
+            /* From lifetime_result for function x:
+             *   mask is the lifetime mask after this instruction, gets assigned to lifetime_masks[x]
+             *   reg_info gets combined into symb_data
+             *     reg is the virtual register it belongs to, this is used to index into symbol_registers/symbol_swapped
+             *     sym is the state of this register, corresponding to the previously mentioned arrays, this is written into symbol_registers/symbol_swapped
+             *   For every positive element in swapped, the physical register at that index was sawpped out.
+             *     Mark the symbols contained in these registers as swapped (and update in symbol_registers/symbol_swapped)
+             *   registers is used to directly update this functions register_state
+             */
+            const __m256i invalid_mask = (instr_offset == -1);
+            /* For all valid indices, gather whether the instructions are enabled */
+            const __m256i enabled_mask = epi32::maskgatherz(used_instrs_avx.data(), instr_offset, ~invalid_mask);
+            const __m256i disabled_mask = (invalid_mask | ~enabled_mask);
+
+            /* There's always 1 instruction enabled, else we wouldn't be here at all */
+        }
+    }
 }
