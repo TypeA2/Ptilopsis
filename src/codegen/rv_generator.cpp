@@ -881,7 +881,8 @@ void rv_generator_st::optimize() {
 }
 
 void rv_generator_st::regalloc() {
-    //dump_instrs();
+    dump_instrs();
+    
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
     stack_sizes = avx_buffer<uint32_t>::zero(func_count);
@@ -1235,7 +1236,20 @@ void rv_generator_st::regalloc() {
                 symbol_registers[symbol_offsets[j]] = all_symbol_data[j];
             }
         }
+
+        for (size_t x = 0; x < symbol_registers.size(); ++x) {
+            if (symbol_registers[x].swapped) {
+                std::cerr << x << " swapped\n";
+            }
+        }
+        std::cerr << '\n';
     }
+
+    for (uint32_t i = 0; i < symbol_registers.size(); ++i) {
+        //std::cerr << i << ": " << int(symbol_registers[i].reg) << " " << (symbol_registers[i].swapped ? "swapped" : "") << '\n';
+    }
+    //dump_instrs();
+    //return;
 
     for (size_t i = 0; i < preserve_masks.size(); ++i) {
         // TODO surely this should include s0?
@@ -1253,12 +1267,14 @@ void rv_generator_st::regalloc() {
     auto reverse_func_id_map = avx_buffer<int64_t>::zero(instructions.size());
     std::inclusive_scan(func_start_bools.begin(), func_start_bools.end(), reverse_func_id_map.begin());
     
+    
     /* For every virtual reg, store whether it was swapped */
     auto spill_offsets = avx_buffer<int64_t>::zero(symbol_registers.size());
     for (size_t i = 0; i < symbol_registers.size(); ++i) {
         spill_offsets[i] = symbol_registers[i].swapped;
     }
 
+    //std::cerr << spill_offsets << '\n';
     /* For every function, add all swapped registers */
     for (size_t i = 0; i < symbol_registers.size(); ++i) {
         /* Segmented scan: restart counting at every function */
@@ -1276,6 +1292,8 @@ void rv_generator_st::regalloc() {
             res += (get_symbol_data(symb_data, rd[instr]).swapped ? 1 : 0);
             res += (get_symbol_data(symb_data, rs1[instr]).swapped ? 1 : 0);
             res += (get_symbol_data(symb_data, rs2[instr]).swapped ? 1 : 0);
+
+            //std::cerr << rd[instr] << " " << rs1[instr] << " " << rs2[instr] << " " << res << "\n\n";
             return res;
         } else {
             return 0;
@@ -1284,7 +1302,7 @@ void rv_generator_st::regalloc() {
 
     auto count_instr_add_preserve = [this, func_count](std::span<uint64_t> preserve_masks, std::span<int64_t> counts) {
         for (size_t i = 0; i < func_count; ++i) {
-            /* Number of registers that need to be preserved*/
+            /* Number of registers that need to be preserved */
             auto preserved = std::popcount(preserve_masks[i]);
             auto start = func_starts[i] + 5;
             auto end = func_starts[i] + function_sizes[i] - 6;
@@ -1302,6 +1320,7 @@ void rv_generator_st::regalloc() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         instr_counts[i] = count_instr(static_cast<uint32_t>(i), symbol_registers, used_instrs);
     }
+    //std::cerr << instr_counts << '\n';
     /* Add space for the instructions to store callee-saved registers */
     count_instr_add_preserve(preserve_masks, instr_counts);
 
