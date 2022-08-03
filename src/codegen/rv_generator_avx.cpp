@@ -899,7 +899,7 @@ void rv_generator_avx::regalloc() {
                  *     Set the symbol to swapped in symbol_swapped.
                  */
                 for (uint32_t k = 0; k < 64; ++k) {
-                    const __m256i extract_reg_mask = _mm256_sll_epi64(epi64::from_value(1), _mm_set1_epi64x(k));
+                    const __m256i extract_reg_mask = _mm256_slli_epi64(epi64::from_value(1), k);
                     
                     /* Whether register k needs to be saved */
                     const __m256i spilled_mask = epi32::pack64_32((spill_mask_lo & extract_reg_mask) > 0, (spill_mask_hi & extract_reg_mask) > 0);
@@ -947,7 +947,67 @@ void rv_generator_avx::regalloc() {
 
             const __m256i non_call_mask = ~is_call_mask;
             if (!epi32::is_zero(non_call_mask)) {
+                /* rs1 and rs2 are used to query current register state */
+                const __m256i rs1 = epi32::maskgatherz(this->rs1_avx.data(), instr_offset, non_call_mask);
+                const __m256i rs1_virtual_mask = (rs1 > 63);
 
+                const __m256i rs2 = epi32::maskgatherz(this->rs2_avx.data(), instr_offset, non_call_mask);
+                const __m256i rs2_virtual_mask = (rs2 > 63);
+
+                /* Use virtual registers to query current physical register and swap state */
+                const __m256i rs1_adjusted = rs1 - 64;
+                __m256i rs1_registers = epi32::maskgatherz(symbol_registers.data(), rs1_adjusted, rs1_virtual_mask);
+                __m256i rs1_swapped = epi32::maskgatherz(symbol_swapped.data(), rs1_adjusted, rs1_virtual_mask);
+
+                const __m256i rs2_adjusted = rs1 - 64;
+                __m256i rs2_registers = epi32::maskgatherz(symbol_registers.data(), rs2_adjusted, rs2_virtual_mask);
+                __m256i rs2_swapped = epi32::maskgatherz(symbol_swapped.data(), rs2_adjusted, rs2_virtual_mask);
+
+                /* For bot rs1 and rs2, if they're currently swapped, allocate a new register to load them in */
+                if (!epi32::is_zero(rs1_swapped)) {
+                    /* FCVT.W.S needs a float source register, and only has rs1, so if the instr matches, require a float */
+                    const __m256i rs1_fcvt_w_s_mask = (instr == 0b1100000'00000'00000'111'00000'1010011);
+                    
+                    /* Or if the instruction opcode is that of floats */
+                    const __m256i rs1_needs_float_mask = rs1_fcvt_w_s_mask | ((instr & 0b1111111) == 0b1010011);
+
+                    /* All swapped registers, 5 if int, 37 if float */
+                    rs1_registers = (rs1_registers & ~rs1_swapped)
+                        | (5_m256i & (rs1_swapped & ~rs1_needs_float_mask))
+                        | (37_m256i & (rs1_swapped & rs1_needs_float_mask));
+                }
+
+                if (!epi32::is_zero(rs2_swapped)) {
+                    /* rs2 is only ever float in a "normal" float instruction */
+                    const __m256i rs2_needs_float_mask = ((instr & 0b1111111) == 0b1010011);
+
+                    rs2_registers = (rs2_registers & ~rs2_swapped)
+                        | (6_m256i & (rs2_swapped & ~rs2_needs_float_mask))
+                        | (38_m256i & (rs2_swapped & rs2_needs_float_mask));
+                }
+
+                /* The architecture is read-once, so mark our newly calculated rs1 and rs2 as ready for re-use */
+                const __m256i one = epi64::from_value(1);
+                __m256i clear_register_mask_lo = _mm256_sllv_epi64(one, epi32::expand32_64_lo(rs1_registers));
+                clear_register_mask_lo = clear_register_mask_lo & _mm256_sllv_epi64(one, epi32::expand32_64_lo(rs2_registers));
+                /* Register 0 is always "used" */
+                clear_register_mask_lo = clear_register_mask_lo | one;
+
+                __m256i clear_register_mask_hi = _mm256_sllv_epi64(one, epi32::expand32_64_hi(rs1_registers));
+                clear_register_mask_hi = clear_register_mask_hi & _mm256_sllv_epi64(one, epi32::expand32_64_hi(rs2_registers));
+                clear_register_mask_hi = clear_register_mask_hi | one;
+
+                lifetime_mask_lo = lifetime_mask_lo & clear_register_mask_lo;
+                lifetime_mask_hi = lifetime_mask_hi & clear_register_mask_hi;
+
+                /* Allocate rd */
+                const __m256i rd = epi32::maskgatherz(this->rd_avx.data(), instr_offset, non_call_mask);
+                const __m256i rd_virtual_mask = (rd > 63);
+                if (!epi32::is_zero(rd_virtual_mask)) {
+                    /* FCVT.S.W and any generic float instructions need a float rd */
+                    const __m256i rd_need_float_mask = (instr == 0b1101000'00000'00000'111'00000'1010011) | ((instr & 0b1111111) == 0b1010011);
+                    // just extract for now
+                }
             }
         }
     }

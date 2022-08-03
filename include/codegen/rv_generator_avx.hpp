@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "codegen/rv_generator.hpp"
 
 /* SIMD-based generator */
@@ -24,4 +26,3 @@ class rv_generator_avx : public rv_generator_st {
     void optimize() override;
     void regalloc() override;
 };
-

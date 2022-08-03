@@ -318,6 +318,10 @@ namespace simd::epi32_operators {
         return _mm256_cmpeq_epi32(lhs, rhs);
     }
 
+    FORCE_INLINE __m256i operator!=(__m256i lhs, __m256i rhs) {
+        return ~(lhs == rhs);
+    }
+
     FORCE_INLINE __m256i operator<(__m256i lhs, __m256i rhs) {
         return ~((lhs == rhs) | (lhs > rhs));
     }
@@ -364,6 +368,10 @@ namespace simd::epi32_operators {
 
     FORCE_INLINE __m256i operator==(__m256i lhs, int rhs) {
         return lhs == _mm256_set1_epi32(rhs);
+    }
+
+    FORCE_INLINE __m256i operator!=(__m256i lhs, int rhs) {
+        return ~(lhs == rhs);
     }
 
     FORCE_INLINE __m256i operator<(__m256i lhs, int rhs) {
@@ -488,6 +496,14 @@ namespace simd::epi32 {
 
         return _mm256_permute4x64_epi64(_mm256_castps_si256(res), 0b11'01'10'00);
     }
+
+    FORCE_INLINE __m256i expand32_64_lo(__m256i a) {
+        return _mm256_cvtepi32_epi64(_mm256_castsi256_si128(a));
+    }
+
+    FORCE_INLINE __m256i expand32_64_hi(__m256i a) {
+        return _mm256_cvtepi32_epi64(_mm256_castsi256_si128(hi_to_lo(a)));
+    }
 }
 
 namespace simd::epi64 {
@@ -516,7 +532,12 @@ namespace simd::epi64 {
 
     template <typename T>
     FORCE_INLINE __m256i gather32(const T* base, __m256i vindex) {
-        return _mm256_i32gather_epi64(reinterpret_cast<const int*>(base), vindex, 8);
+        return _mm256_i32gather_epi64(reinterpret_cast<const __int64*>(base), vindex, 8);
+    }
+
+    template <typename T>
+    FORCE_INLINE __m256i gather64(const T* base, __m256i vindex) {
+        return _mm256_i64gather_epi64(reinterpret_cast<const __int64*>(base), vindex, 8);
     }
 
     template <typename T>
@@ -531,5 +552,56 @@ namespace simd::epi64 {
 
     FORCE_INLINE __m256i and256(__m256i a, __int64 val) {
         return _mm256_and_si256(a, from_value(val));
+    }
+
+    FORCE_INLINE __m128i to_128i(__m256i a) {
+        return _mm256_castsi256_si128(a);
+    }
+
+    namespace detail {
+        constexpr auto generate_popcnt_lookup() {
+            /* Pad a bit so we can safely read a few bytes past the end */
+            std::array<uint8_t, 264> res {};
+            res[0ull << 0] = 8; // 0b00000000
+            res[1ull << 0] = 0; // 0b00000001
+            res[1ull << 1] = 1; // 0b00000010
+            res[1ull << 2] = 2; // 0b00000100
+            res[1ull << 3] = 3; // 0b00001000
+            res[1ull << 4] = 4; // 0b00010000
+            res[1ull << 5] = 5; // 0b00100000
+            res[1ull << 6] = 6; // 0b01000000
+            res[1ull << 7] = 7; // 0b10000000
+
+            return res;
+        }
+
+        constexpr auto popcnt_lookup = generate_popcnt_lookup();
+    }
+
+    FORCE_INLINE __m256i ffs(__m256i v) {
+        // TODO broken on res > 32...
+        // TODO not used currently 
+        /* Find the index of the first bit set, or 64. No integer division, so use an 8-part lookup */
+        __m256i res = _mm256_setzero_si256();
+        __m256i done_mask = _mm256_cmpeq_epi64(_mm256_and_si256(v, _mm256_set1_epi64x(1)), _mm256_set1_epi64x(1));
+        /* Isolate the lowest bit of each element using 2's complement */
+        v = _mm256_and_si256(v, _mm256_sub_epi64(_mm256_setzero_si256(), v));
+        for (uint64_t i = 0; i < 8; ++i) {
+            /* Extract the current byte being looked at */
+            const __m256i masked = _mm256_and_si256(_mm256_srli_epi64(v, i * 8), _mm256_set1_epi64x(0xFF));
+
+            /* Perform actual lookup */
+            __m256i val = _mm256_i64gather_epi64(reinterpret_cast<const __int64*>(detail::popcnt_lookup.data()), masked, 1);
+            val = _mm256_and_si256(val, _mm256_set1_epi64x(0xFF));
+            //return val;
+            /* Only add ones that are not done */
+            res = _mm256_add_epi64(res, _mm256_andnot_si256(done_mask, val));
+
+            /* Mark finished ones as done */
+            const __m256i is_zero_mask = _mm256_cmpeq_epi64(val, _mm256_set1_epi64x(8));
+            done_mask = _mm256_or_si256(done_mask, _mm256_xor_si256(is_zero_mask, _mm256_set1_epi64x(-1ll)));
+        }
+
+        return res;
     }
 }
