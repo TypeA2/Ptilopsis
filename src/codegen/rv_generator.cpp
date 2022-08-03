@@ -1236,17 +1236,10 @@ void rv_generator_st::regalloc() {
                 symbol_registers[symbol_offsets[j]] = all_symbol_data[j];
             }
         }
-
-        for (size_t x = 0; x < symbol_registers.size(); ++x) {
-            if (symbol_registers[x].swapped) {
-                std::cerr << x << " swapped\n";
-            }
-        }
-        std::cerr << '\n';
     }
 
     for (uint32_t i = 0; i < symbol_registers.size(); ++i) {
-        //std::cerr << i << ": " << int(symbol_registers[i].reg) << " " << (symbol_registers[i].swapped ? "swapped" : "") << '\n';
+        std::cerr << i << ": " << int(symbol_registers[i].reg) << " " << (symbol_registers[i].swapped ? "swapped" : "") << '\n';
     }
     //dump_instrs();
     //return;

@@ -993,15 +993,16 @@ void rv_generator_avx::regalloc() {
                 const m256i one = epi64::from_value(1);
                 m256i clear_register_mask_lo = _mm256_sllv_epi64(one, epi32::expand32_64_lo(rs1_registers));
                 clear_register_mask_lo = clear_register_mask_lo & _mm256_sllv_epi64(one, epi32::expand32_64_lo(rs2_registers));
-                /* Register 0 is always "used" */
-                clear_register_mask_lo = clear_register_mask_lo | one;
+
+                /* Never free up register 0*/
+                clear_register_mask_lo = clear_register_mask_lo & epi64::from_value(-2);
 
                 m256i clear_register_mask_hi = _mm256_sllv_epi64(one, epi32::expand32_64_hi(rs1_registers));
                 clear_register_mask_hi = clear_register_mask_hi & _mm256_sllv_epi64(one, epi32::expand32_64_hi(rs2_registers));
-                clear_register_mask_hi = clear_register_mask_hi | one;
+                clear_register_mask_hi = clear_register_mask_hi & epi64::from_value(-2);
 
-                const m256i cleared_lifetime_mask_lo = lifetime_mask_lo & clear_register_mask_lo;
-                const m256i cleared_lifetime_mask_hi = lifetime_mask_hi & clear_register_mask_hi;
+                const m256i cleared_lifetime_mask_lo = lifetime_mask_lo & ~clear_register_mask_lo;
+                const m256i cleared_lifetime_mask_hi = lifetime_mask_hi & ~clear_register_mask_hi;
 
                 /* Allocate rd */
                 m256i rd = epi32::maskgatherz(this->rd_avx.data(), instr_offset, non_call_mask);
@@ -1036,16 +1037,19 @@ void rv_generator_avx::regalloc() {
 
                     /* If a register is 64, no register was found, so allocate a temporary based on type */
                     const m256i rd_overflow_mask = (rd == 64);
-                    rd = (rd & ~rd_overflow_mask) | (37_m256i & rd_float_mask) | (5_m256i & ~rd_float_mask);
+                    rd = (rd & ~rd_overflow_mask) | (37_m256i & (rd_overflow_mask & rd_float_mask)) | (5_m256i & (rd_overflow_mask & ~rd_float_mask));
+                    rd = rd & non_call_mask;
                 }
-
+                //std::cerr << "offsets: " << format<32, true>(instr_offset) << '\n' << "original rd:" << original_rd << "\nrd: " << rd << '\n';
                 /* If rs1 or rs2 were in use before this, they need to be marked as swapped */
+                const m256i non_call_mask_lo = epi32::expand32_64_lo(non_call_mask);
+                const m256i non_call_mask_hi = epi32::expand32_64_hi(non_call_mask);
                 // TODO this actual double work w.r.t. clearing the registers
                 const m256i rs1_registers_lo = epi32::expand32_64_lo(rs1_registers);
                 const m256i rs1_registers_hi = epi32::expand32_64_hi(rs1_registers);
 
-                const m256i rs1_mask_lo = _mm256_sllv_epi64(one, rs1_registers_lo);
-                const m256i rs1_mask_hi = _mm256_sllv_epi64(one, rs1_registers_hi);
+                const m256i rs1_mask_lo = _mm256_sllv_epi64(one, rs1_registers_lo) & non_call_mask_lo;
+                const m256i rs1_mask_hi = _mm256_sllv_epi64(one, rs1_registers_hi) & non_call_mask_hi;
 
                 /* If a register is not zero and it was in use previously, it has been swapped */
                 const m256i rs1_swapped_mask_lo = ~(epi64::cmpeq(rs1_registers_lo, epi32::zero()) | epi64::cmpeq(lifetime_mask_lo & rs1_mask_lo, epi32::zero()));
@@ -1059,8 +1063,8 @@ void rv_generator_avx::regalloc() {
                 const m256i rs2_registers_lo = epi32::expand32_64_lo(rs2_registers);
                 const m256i rs2_registers_hi = epi32::expand32_64_hi(rs2_registers);
 
-                const m256i rs2_mask_lo = _mm256_sllv_epi64(one, rs2_registers_lo);
-                const m256i rs2_mask_hi = _mm256_sllv_epi64(one, rs2_registers_hi);
+                const m256i rs2_mask_lo = _mm256_sllv_epi64(one, rs2_registers_lo) & non_call_mask_lo;
+                const m256i rs2_mask_hi = _mm256_sllv_epi64(one, rs2_registers_hi) & non_call_mask_hi;
 
                 const m256i rs2_swapped_mask_lo = ~(epi64::cmpeq(rs2_registers_lo, epi32::zero()) | epi64::cmpeq(lifetime_mask_lo & rs2_mask_lo, epi32::zero()));
                 const m256i rs2_swapped_mask_hi = ~(epi64::cmpeq(rs2_registers_hi, epi32::zero()) | epi64::cmpeq(lifetime_mask_hi & rs2_mask_hi, epi32::zero()));
@@ -1072,8 +1076,8 @@ void rv_generator_avx::regalloc() {
                 const m256i rd_registers_lo = epi32::expand32_64_lo(rd);
                 const m256i rd_registers_hi = epi32::expand32_64_hi(rd);
 
-                const m256i rd_mask_lo = _mm256_sllv_epi64(one, rd_registers_lo);
-                const m256i rd_mask_hi = _mm256_sllv_epi64(one, rd_registers_hi);
+                const m256i rd_mask_lo = _mm256_sllv_epi64(one, rd_registers_lo) & non_call_mask_lo;
+                const m256i rd_mask_hi = _mm256_sllv_epi64(one, rd_registers_hi) & non_call_mask_hi;
 
                 const m256i rd_swapped_mask_lo = ~(epi64::cmpeq(rd_registers_lo, epi32::zero()) | epi64::cmpeq(cleared_lifetime_mask_lo & rd_mask_lo, epi32::zero()));
                 const m256i rd_swapped_mask_hi = ~(epi64::cmpeq(rd_registers_hi, epi32::zero()) | epi64::cmpeq(cleared_lifetime_mask_hi & rd_mask_hi, epi32::zero()));
@@ -1087,8 +1091,12 @@ void rv_generator_avx::regalloc() {
                     const m256i virtual_rs1_regs = epi32::maskgather(epi32::from_value(-1), original_register_state.data(), rs1_swapped_registers, rs1_swapped_mask);
                     const m256i rs1_swapped_indices = virtual_rs1_regs - 64;
                     AVX_ALIGNED auto rs1_swapped_indices_array = epi32::extract(rs1_swapped_indices);
+                    std::cerr << lifetime_mask_lo << '\n';
                     for (uint32_t k = 0; k < 8; ++k) {
                         if (int idx = rs1_swapped_indices_array[k]; idx >= 0) {
+                            std::cerr << "swapping rs1 " << idx << '\n';
+                            std::cerr << rs1_registers << '\n';
+                            std::cerr << virtual_rs1_regs << '\n';
                             symbol_swapped[idx] = 0xFFFFFFFF;
                         }
                     }
@@ -1100,6 +1108,7 @@ void rv_generator_avx::regalloc() {
                     AVX_ALIGNED auto rs2_swapped_indices_array = epi32::extract(rs2_swapped_indices);
                     for (uint32_t k = 0; k < 8; ++k) {
                         if (int idx = rs2_swapped_indices_array[k]; idx >= 0) {
+                            std::cerr << "swapping rs2 " << idx << '\n';
                             symbol_swapped[idx] = 0xFFFFFFFF;
                         }
                     }
@@ -1111,14 +1120,19 @@ void rv_generator_avx::regalloc() {
                     AVX_ALIGNED auto rd_swapped_indices_array = epi32::extract(rd_swapped_indices);
                     for (uint32_t k = 0; k < 8; ++k) {
                         if (int idx = rd_swapped_indices_array[k]; idx >= 0) {
+                            std::cerr << "swapping rd " << idx << '\n';
                             symbol_swapped[idx] = 0xFFFFFFFF;
                         }
                     }
                 }
 
-                /* Set rd to be in use and store in the llifetime mask and store */
-                epi64::store(lifetime_masks.m256i(2 * j), cleared_lifetime_mask_lo | rd_mask_lo);
-                epi64::store(lifetime_masks.m256i((2 * j) + 1), cleared_lifetime_mask_hi | rd_mask_hi);
+                /* Set rd to be in use and store in the lifetime mask and store */
+                //std::cerr << "lifetime: " << format<64, true>(lifetime_mask_lo) << format<64, true>(lifetime_mask_hi) << "\n";
+                //std::cerr << "cleared lifetime: " << format<64, true>(cleared_lifetime_mask_lo) << format<64, true>(cleared_lifetime_mask_hi) << "\n";
+                //std::cerr << "final: " << format<64, true>(cleared_lifetime_mask_lo | rd_mask_lo) << format<64, true>(cleared_lifetime_mask_hi | rd_mask_hi) << "\n";
+
+                epi64::maskstore(lifetime_masks.m256i(2 * j), cleared_lifetime_mask_lo | rd_mask_lo, epi32::expand32_64_lo(non_call_mask));
+                epi64::maskstore(lifetime_masks.m256i((2 * j) + 1), cleared_lifetime_mask_hi | rd_mask_hi, epi32::expand32_64_hi(non_call_mask));
 
                 /* Mark the physical registers rd as mapping to their virtual registers */
                 {
@@ -1194,17 +1208,10 @@ void rv_generator_avx::regalloc() {
                 }
             }
         }
-
-        for (uint32_t j = 0; j < symbol_swapped.size(); ++j) {
-            if (symbol_swapped[j]) {
-                std::cerr << j << " swapped\n";
-            }
-        }
-        std::cerr << '\n';
     }
 
     for (uint32_t i = 0; i < symbol_registers.size(); ++i) {
-        //std::cerr << i << ": " << symbol_registers[i] << " " << (symbol_swapped[i] ? "swapped" : "") << '\n';
+        std::cerr << i << ": " << symbol_registers[i] << " " << (symbol_swapped[i] ? "swapped" : "") << '\n';
     }
 
     /* Only preserve caller-saved registers */
