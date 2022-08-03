@@ -7,7 +7,8 @@
 #include <magic_enum.hpp>
 
 #include "simd.hpp"
-#include "disassembler.h"
+#include "disassembler.hpp"
+#include "utils.hpp"
 
 using namespace simd::epi32_operators;
 
@@ -923,13 +924,13 @@ void rv_generator_avx::regalloc() {
                     const __m256i swapped_regs = virtual_regs - 64;
 
                     /* For all swapped virtual registers, set swapped to true */
-                    const __m256i swapped_indices = (virtual_regs & spilled_mask) | (epi32::from_value(-1) & ~spilled_mask);
+                    const __m256i swapped_indices = (swapped_regs & spilled_mask) | (epi32::from_value(-1) & ~spilled_mask);
 
                     /* For all spilled reigsters, set swapped to 1 */
                     AVX_ALIGNED auto swapped_indices_array = epi32::extract(swapped_indices);
                     for (uint32_t l = 0; l < 8; ++l) {
                         /* Mark swapped symbols as swapped out */
-                        if (int idx = swapped_indices_array[l]; l >= 0) {
+                        if (int idx = swapped_indices_array[l]; idx >= 0) {
                             symbol_swapped[idx] = 0xFFFFFFFF;
                         }
                     }
@@ -997,16 +998,154 @@ void rv_generator_avx::regalloc() {
                 clear_register_mask_hi = clear_register_mask_hi & _mm256_sllv_epi64(one, epi32::expand32_64_hi(rs2_registers));
                 clear_register_mask_hi = clear_register_mask_hi | one;
 
-                lifetime_mask_lo = lifetime_mask_lo & clear_register_mask_lo;
-                lifetime_mask_hi = lifetime_mask_hi & clear_register_mask_hi;
+                const __m256i cleared_lifetime_mask_lo = lifetime_mask_lo & clear_register_mask_lo;
+                const __m256i cleared_lifetime_mask_hi = lifetime_mask_hi & clear_register_mask_hi;
 
                 /* Allocate rd */
-                const __m256i rd = epi32::maskgatherz(this->rd_avx.data(), instr_offset, non_call_mask);
+                __m256i rd = epi32::maskgatherz(this->rd_avx.data(), instr_offset, non_call_mask);
+                const __m256i original_rd = rd;
                 const __m256i rd_virtual_mask = (rd > 63);
                 if (!epi32::is_zero(rd_virtual_mask)) {
                     /* FCVT.S.W and any generic float instructions need a float rd */
-                    const __m256i rd_need_float_mask = (instr == 0b1101000'00000'00000'111'00000'1010011) | ((instr & 0b1111111) == 0b1010011);
-                    // just extract for now
+                    const __m256i rd_float_mask = (instr == 0b1101000'00000'00000'111'00000'1010011) | ((instr & 0b1111111) == 0b1010011);
+                    
+                    /* If a float is required, mask all integer registers to 1's, else mask all float registers to 1's */
+                    const __m256i float_mask_lo = epi32::expand32_64_lo(rd_float_mask);
+                    const __m256i float_mask_hi = epi32::expand32_64_hi(rd_float_mask);
+                    const __m256i adjust_mask_lo = (float_mask_lo & epi64::from_value(0xFFFFFFFF)) | (~float_mask_lo & epi64::from_value(0xFFFFFFFFull << 32));
+                    const __m256i adjust_mask_hi = (float_mask_hi & epi64::from_value(0xFFFFFFFF)) | (~float_mask_hi & epi64::from_value(0xFFFFFFFFull << 32));
+                   
+                    const __m256i adjusted_lifetime_mask_lo = cleared_lifetime_mask_lo | adjust_mask_lo;
+                    const __m256i adjusted_lifetime_mask_hi = cleared_lifetime_mask_hi | adjust_mask_hi;
+
+                    AVX_ALIGNED auto rd_virtual_mask_array = epi32::extract(rd_virtual_mask);
+                    AVX_ALIGNED std::array<uint64_t, 8> lifetime_mask_array {};
+                    epi64::maskstore(&lifetime_mask_array[0], epi32::expand32_64_lo(rd_virtual_mask), adjust_mask_lo);
+                    epi64::maskstore(&lifetime_mask_array[4], epi32::expand32_64_hi(rd_virtual_mask), adjust_mask_hi);
+
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        /* For every virtual register in rd, obtain a physical register to assign, and store into rd */
+                        if (rd_virtual_mask_array[k]) {
+                            const __m256i mask = epi32::from_values((k == 0) ? 0 : -1, (k == 1) ? 0 : -1, (k == 2) ? 0 : -1, (k == 3) ? 0 : -1,
+                                (k == 4) ? 0 : -1, (k == 5) ? 0 : -1, (k == 6) ? 0 : -1, (k == 7) ? 0 : -1);
+                            rd = (rd & mask) | ptilopsis::ffz(lifetime_mask_array[k]);
+                        }
+                    }
+
+                    /* If a register is 64, no register was found, so allocate a temporary based on type */
+                    const __m256i rd_overflow_mask = (rd == 64);
+                    rd = (rd & ~rd_overflow_mask) | (37_m256i & rd_float_mask) | (5_m256i & ~rd_float_mask);
+                }
+
+                /* If rs1 or rs2 were in use before this, they need to be marked as swapped */
+                // TODO this actual double work w.r.t. clearing the registers
+                const __m256i rs1_registers_lo = epi32::expand32_64_lo(rs1_registers);
+                const __m256i rs1_registers_hi = epi32::expand32_64_hi(rs1_registers);
+
+                const __m256i rs1_mask_lo = _mm256_sllv_epi64(one, rs1_registers_lo);
+                const __m256i rs1_mask_hi = _mm256_sllv_epi64(one, rs1_registers_hi);
+
+                /* If a register is not zero and it was in use previously, it has been swapped */
+                const __m256i rs1_swapped_mask_lo = ~(epi64::cmpeq(rs1_registers_lo, epi32::zero()) | epi64::cmpeq(lifetime_mask_lo & rs1_mask_lo, epi32::zero()));
+                const __m256i rs1_swapped_mask_hi = ~(epi64::cmpeq(rs1_registers_hi, epi32::zero()) | epi64::cmpeq(lifetime_mask_hi & rs1_mask_hi, epi32::zero()));
+                const __m256i rs1_swapped_mask = epi32::pack64_32(rs1_swapped_mask_lo, rs1_swapped_mask_hi);
+
+                /* Isolate the swapped registers */
+                const __m256i rs1_swapped_registers = (rs1_registers & rs1_swapped_mask);
+
+                /* Same but for rs2 */
+                const __m256i rs2_registers_lo = epi32::expand32_64_lo(rs2_registers);
+                const __m256i rs2_registers_hi = epi32::expand32_64_hi(rs2_registers);
+
+                const __m256i rs2_mask_lo = _mm256_sllv_epi64(one, rs2_registers_lo);
+                const __m256i rs2_mask_hi = _mm256_sllv_epi64(one, rs2_registers_hi);
+
+                const __m256i rs2_swapped_mask_lo = ~(epi64::cmpeq(rs2_registers_lo, epi32::zero()) | epi64::cmpeq(lifetime_mask_lo & rs2_mask_lo, epi32::zero()));
+                const __m256i rs2_swapped_mask_hi = ~(epi64::cmpeq(rs2_registers_hi, epi32::zero()) | epi64::cmpeq(lifetime_mask_hi & rs2_mask_hi, epi32::zero()));
+                const __m256i rs2_swapped_mask = epi32::pack64_32(rs2_swapped_mask_lo, rs2_swapped_mask_hi);
+
+                const __m256i rs2_swapped_registers = (rs2_registers & rs2_swapped_mask);
+
+                /* Similar for rd, except use the cleared_lifetime_mask, since rs1 and rs2 are free at the moment rd is used */
+                const __m256i rd_registers_lo = epi32::expand32_64_lo(rd);
+                const __m256i rd_registers_hi = epi32::expand32_64_hi(rd);
+
+                const __m256i rd_mask_lo = _mm256_sllv_epi64(one, rd_registers_lo);
+                const __m256i rd_mask_hi = _mm256_sllv_epi64(one, rd_registers_hi);
+
+                const __m256i rd_swapped_mask_lo = ~(epi64::cmpeq(rd_registers_lo, epi32::zero()) | epi64::cmpeq(cleared_lifetime_mask_lo & rd_mask_lo, epi32::zero()));
+                const __m256i rd_swapped_mask_hi = ~(epi64::cmpeq(rd_registers_hi, epi32::zero()) | epi64::cmpeq(cleared_lifetime_mask_hi & rd_mask_hi, epi32::zero()));
+                const __m256i rd_swapped_mask = epi32::pack64_32(rd_swapped_mask_lo, rd_swapped_mask_hi);
+
+                const __m256i rd_swapped_registers = (rd & rd_swapped_mask);
+
+                /* For rs1_swapped, rs2_swapped and rd_swapped, use the register numbers to gather the virtual register contained from original_register_state */
+                // TODO reordering this is probably useful...
+                if (!epi32::is_zero(rs1_swapped_mask)) {
+                    const __m256i virtual_rs1_regs = epi32::maskgather(epi32::from_value(-1), original_register_state.data(), rs1_swapped_registers, rs1_swapped_mask);
+                    const __m256i rs1_swapped_indices = virtual_rs1_regs - 64;
+                    AVX_ALIGNED auto rs1_swapped_indices_array = epi32::extract(rs1_swapped_indices);
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        if (int idx = rs1_swapped_indices_array[k]; idx >= 0) {
+                            symbol_swapped[idx] = 0xFFFFFFFF;
+                        }
+                    }
+                }
+
+                if (!epi32::is_zero(rs2_swapped_mask)) {
+                    const __m256i virtual_rs2_regs = epi32::maskgather(epi32::from_value(-1), original_register_state.data(), rs2_swapped_registers, rs2_swapped_mask);
+                    const __m256i rs2_swapped_indices = virtual_rs2_regs - 64;
+                    AVX_ALIGNED auto rs2_swapped_indices_array = epi32::extract(rs2_swapped_indices);
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        if (int idx = rs2_swapped_indices_array[k]; idx >= 0) {
+                            symbol_swapped[idx] = 0xFFFFFFFF;
+                        }
+                    }
+                }
+
+                if (!epi32::is_zero(rd_swapped_mask)) {
+                    const __m256i virtual_rd_regs = epi32::maskgather(epi32::from_value(-1), original_register_state.data(), rd_swapped_registers, rd_swapped_mask);
+                    const __m256i rd_swapped_indices = virtual_rd_regs - 64;
+                    AVX_ALIGNED auto rd_swapped_indices_array = epi32::extract(rd_swapped_indices);
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        if (int idx = rd_swapped_indices_array[k]; idx >= 0) {
+                            symbol_swapped[idx] = 0xFFFFFFFF;
+                        }
+                    }
+                }
+
+                /* Set rd to be in use and store in the llifetime mask and store */
+                epi64::store(lifetime_masks.m256i(2 * j), cleared_lifetime_mask_lo | rd_mask_lo);
+                epi64::store(lifetime_masks.m256i((2 * j) + 1), cleared_lifetime_mask_hi | rd_mask_hi);
+
+                /* Mark the physical registers rd as mapping to their virtual registers */
+                {
+                    AVX_ALIGNED auto rd_array = epi32::extract(rd);
+                    AVX_ALIGNED auto original_rd_array = epi32::extract(original_rd);
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        register_state[(k * 64) + rd_array[k]] = original_rd_array[k];
+                    }
+                }
+
+                /* Mask rs1 and rs2 as free if they're not rd */
+                {
+                    const __m256i rs1_free_mask = (rs1_registers != rd);
+                    AVX_ALIGNED auto rs1_free_array = epi32::extract((rs1_registers & rs1_free_mask) | (epi32::from_value(-1) & ~rs1_free_mask));
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        if (int reg = rs1_free_array[k]; reg >= 0) {
+                            register_state[(k * 64) + reg] = -1;
+                        }
+                    }
+                }
+
+                {
+                    const __m256i rs2_free_mask = (rs2_registers != rd);
+                    AVX_ALIGNED auto rs2_free_array = epi32::extract((rs2_registers & rs2_free_mask) | (epi32::from_value(-1) & ~rs2_free_mask));
+                    for (uint32_t k = 0; k < 8; ++k) {
+                        if (int reg = rs2_free_array[k]; reg >= 0) {
+                            register_state[(k * 64) + reg] = -1;
+                        }
+                    }
                 }
             }
         }

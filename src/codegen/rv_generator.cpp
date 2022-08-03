@@ -3,7 +3,7 @@
 #include "codegen/rv_nodetype.hpp"
 
 #include "utils.hpp"
-#include "disassembler.h"
+#include "disassembler.hpp"
 
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -1158,7 +1158,7 @@ void rv_generator_st::regalloc() {
 
         /* Analyze all instructions we need to analyze */
 
-        /* Store a copy of the virtual to physical register mapping from before this instruction */
+        /* Store a copy of the physical to virtual register mapping from before this instruction */
         auto reg_state_copy = register_state;
 
         /* At most rd, rs1 and rs2 are updated every instruction */

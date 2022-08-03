@@ -115,7 +115,7 @@
     <ClInclude Include="include\codegen\rv_generator_avx.hpp" />
     <ClInclude Include="include\codegen\rv_nodetype.hpp" />
     <ClInclude Include="include\codegen\avx_buffer.hpp" />
-    <ClInclude Include="include\disassembler.h" />
+    <ClInclude Include="include\disassembler.hpp" />
     <ClInclude Include="include\simd.hpp" />
     <ClInclude Include="include\threading.hpp" />
     <ClInclude Include="include\utils.hpp" />

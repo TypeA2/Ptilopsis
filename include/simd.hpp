@@ -7,15 +7,15 @@
 
 #include <magic_enum.hpp>
 
+/* Align for potential AVX-512 usage */
+#define AVX_ALIGNMENT 64
+#define AVX_ALIGNED alignas(64)
+
 #ifdef _MSC_VER
 #   define FORCE_INLINE __forceinline
 #else
 #   define FORCE_INLINE inline __attribute__((__always_inline__))
 #endif
-
-/* Align for potential AVX-512 usage */
-#define AVX_ALIGNMENT 64
-#define AVX_ALIGNED alignas(64)
 
 /* Pretty-printing */
 template <size_t bits>
@@ -278,7 +278,6 @@ namespace simd::epi32_operators {
         return _mm256_set1_epi32(static_cast<int>(v & 0xFFFFFFFF));
     }
 
-#ifdef _MSC_VER
     FORCE_INLINE __m256i operator~(__m256i lhs) {
         return _mm256_xor_si256(lhs, 0xFFFFFFFF_m256i);
     }
@@ -387,7 +386,6 @@ namespace simd::epi32_operators {
         const __m256i val = _mm256_set1_epi32(rhs);
         return (lhs == val) | (lhs > val);
     }
-#endif
 }
 
 namespace simd::epi32 {
@@ -522,6 +520,16 @@ namespace simd::epi64 {
         return _mm256_maskload_epi64(reinterpret_cast<const __int64*>(ptr), mask);
     }
 
+    template <typename T>
+    FORCE_INLINE void store(T* ptr, __m256i a) {
+        _mm256_store_si256(reinterpret_cast<__m256i*>(ptr), a);
+    }
+
+    template <typename T>
+    FORCE_INLINE void maskstore(T* ptr, __m256i mask, __m256i src) {
+        _mm256_maskstore_epi64(reinterpret_cast<__int64*>(ptr), mask, src);
+    }
+
     FORCE_INLINE __m256i from_value(__int64 v) {
         return _mm256_set1_epi64x(v);
     }
@@ -558,6 +566,11 @@ namespace simd::epi64 {
         return _mm256_castsi256_si128(a);
     }
 
+    FORCE_INLINE __m256i cmpeq(__m256i a, __m256i b) {
+        return _mm256_cmpeq_epi64(a, b);
+    }
+
+#if 0
     namespace detail {
         constexpr auto generate_popcnt_lookup() {
             /* Pad a bit so we can safely read a few bytes past the end */
@@ -602,6 +615,14 @@ namespace simd::epi64 {
             done_mask = _mm256_or_si256(done_mask, _mm256_xor_si256(is_zero_mask, _mm256_set1_epi64x(-1ll)));
         }
 
+        return res;
+    }
+#endif
+
+    template <typename T = __int64> requires (sizeof(T) == 8)
+        FORCE_INLINE [[nodiscard]] std::array<T, 4> extract(__m256i a) {
+        AVX_ALIGNED std::array<T, 4> res;
+        epi32::store(res.data(), a);
         return res;
     }
 }
