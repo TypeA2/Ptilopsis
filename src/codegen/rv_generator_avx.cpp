@@ -4,6 +4,7 @@
 #include <bitset>
 #include <iomanip>
 #include <cmath>
+#include <bit>
 
 #include <magic_enum.hpp>
 
@@ -829,7 +830,6 @@ void rv_generator_avx::optimize() {
 }
 
 void rv_generator_avx::regalloc() {
-    dump_instrs();
     /* Process 1 instruction per function at a time, to at least have some parallelism */
     uint32_t max_func_size = std::ranges::max(function_sizes);
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
@@ -1025,15 +1025,18 @@ void rv_generator_avx::regalloc() {
                     AVX_ALIGNED std::array<uint64_t, 8> lifetime_mask_array {};
                     epi64::maskstore(&lifetime_mask_array[0], epi32::expand32_64_lo(rd_virtual_mask), adjusted_lifetime_mask_lo);
                     epi64::maskstore(&lifetime_mask_array[4], epi32::expand32_64_hi(rd_virtual_mask), adjusted_lifetime_mask_hi);
-
+                    
+                    std::cerr << format<32, true>(rd_virtual_mask) << "\n";
                     for (uint32_t k = 0; k < 8; ++k) {
                         /* For every virtual register in rd, obtain a physical register to assign, and store into rd */
                         if (rd_virtual_mask_array[k]) {
                             const m256i mask = epi32::from_values((k == 0) ? 0 : -1, (k == 1) ? 0 : -1, (k == 2) ? 0 : -1, (k == 3) ? 0 : -1,
                                 (k == 4) ? 0 : -1, (k == 5) ? 0 : -1, (k == 6) ? 0 : -1, (k == 7) ? 0 : -1);
                             rd = (rd & mask) | ptilopsis::ffz(lifetime_mask_array[k]);
+                            std::cerr << format<32, true>(mask) << "\n";
                         }
                     }
+                    std::cerr << "\n";
 
                     /* If a register is 64, no register was found, so allocate a temporary based on type */
                     const m256i rd_overflow_mask = (rd == 64);
@@ -1210,16 +1213,6 @@ void rv_generator_avx::regalloc() {
         }
     }
 
-    for (uint32_t i = 0; i < symbol_registers.size(); ++i) {
-        std::cerr << i << ": " << symbol_registers[i] << " " << (symbol_swapped[i] ? "swapped" : "") << '\n';
-    }
-
-    /* Only preserve caller-saved registers */
-    for (uint32_t i = 0; i < preserve_masks.size_m256i(); ++i) {
-        const m256i masks = epi64::load(preserve_masks.m256i(i));
-        epi64::store(preserve_masks.m256i(i), masks & epi64::from_value(nonscratch_registers));
-    }
-
     avx_buffer<uint32_t> reverse_func_id_map { instr.size() };
     /* Scatter, so scalar... */
     for (uint32_t start : func_starts) {
@@ -1276,12 +1269,201 @@ void rv_generator_avx::regalloc() {
         m256i res = base;
         res = res + (base & rs1_swapped) + (base & rs2_swapped) + (base & rd_swapped);
 
-        //std::cerr << format<32, true>(rd_swapped) << "\n" << format<32, true>(rs1_swapped) << "\n" << format<32, true>(rs2_swapped) << "\n";
-        //std::cerr << rd << '\n' << rs1 << '\n' << rs2 << '\n' << res << "\n\n";
         epi32::maskstore(instr_counts.m256i(i), enabled, res);
     }
 
-    //std::cerr << instr_counts << '\n';
+    /* Only preserve caller-saved registers */
+    const m256i nonscratch = epi64::from_value(nonscratch_registers);
+    for (uint32_t i = 0; i < preserve_masks.size_m256i(); ++i) {
+        const m256i masks = nonscratch & epi64::load(preserve_masks.m256i(i));
+        AVX_ALIGNED auto elements = epi64::extract<uint64_t>(masks);
+        AVX_ALIGNED auto iota = epi64::extract<uint64_t>(_mm256_add_epi64(epi64::from_value(4 * i), epi64::from_values(0, 1, 2, 3)));
+        for (uint32_t j = 0; j < 4; ++j) {
+            uint64_t func_id = iota[j];
+            if (func_id < func_starts.size()) {
+                uint32_t preserved = std::popcount(elements[j]);
+                
+                instr_counts[func_starts[func_id] + 5] += preserved;
+                instr_counts[func_starts[func_id] + function_sizes[func_id] - 6] += preserved;
+            }
+        }
+    }
 
-    //dump_instrs();
+    /* Exclusive scan on the newly calculated offsets */
+    offset = epi32::zero();
+    avx_buffer<uint32_t> instr_offsets { instr.size() };
+    for (uint32_t i = 0; i < instr_counts.size_m256i(); ++i) {
+        m256i vals = epi32::loadu(&instr_counts[i * 8] - 1);
+
+        vals = vals + _mm256_slli_si256_dual<4>(vals);
+        vals = vals + _mm256_slli_si256_dual<8>(vals);
+        vals = vals + _mm256_slli_si256_dual<16>(vals);
+
+        vals = vals + offset;
+
+        offset = _mm256_permutevar8x32_epi32(vals, 7_m256i);
+
+        epi32::store(instr_offsets.m256i(i), vals);
+    }
+
+    uint32_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
+
+    avx_buffer<uint32_t> new_instr { new_instr_count };
+    avx_buffer<uint32_t> new_rd { new_instr_count };
+    avx_buffer<uint32_t> new_rs1 { new_instr_count };
+    avx_buffer<uint32_t> new_rs2 { new_instr_count };
+    avx_buffer<uint32_t> new_jt { new_instr_count };
+
+    stack_sizes = avx_buffer<uint32_t> { func_count };
+
+    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+        const m256i used_mask = epi32::load(this->used_instrs_avx.m256i(i));
+        if (!epi32::is_zero(used_mask)) {
+            /* Starting offsets for the instructions */
+            const m256i base_offset = epi32::maskload(instr_offsets.m256i(i), used_mask);
+            const m256i instr = epi32::maskload(this->instr.m256i(i), used_mask);
+
+            const m256i rs1 = epi32::maskload(this->rs1_avx.m256i(i), used_mask);
+            const m256i rs1_virtual_mask = (rs1 > 63);
+            const m256i rs1_adjusted = rs1 - 64;
+            m256i rs1_load_offset = epi32::from_value(-1);
+            m256i rs1_stack_offset = epi32::zero();
+            m256i allocated_rs1 = rs1 & ~rs1_virtual_mask;
+            if (!epi32::is_zero(rs1_virtual_mask)) {
+                const m256i swapped_mask = epi32::maskgatherz(symbol_swapped.data(), rs1_adjusted, rs1_virtual_mask);
+
+                /* rs1 load offset is at the very start, keep all non-swapped ones at -1 */
+                rs1_load_offset = ~swapped_mask | base_offset;
+                rs1_stack_offset = epi32::maskgatherz(spill_offsets.data(), rs1_adjusted, rs1_virtual_mask);
+
+                /* If rs1 was swapped, load into t0 or ft5 */
+                const m256i need_float_mask = (instr == 0b1100000'00000'00000'111'00000'1010011) | ((instr & 0b1111111) == 0b1010011);
+
+                const m256i actual_regs = epi32::maskgatherz(symbol_registers.data(), rs1_adjusted, rs1_virtual_mask & ~swapped_mask);
+
+                /* Nonvirtual -> rs1 
+                 * Virtual non-swapped -> actual_regs
+                 * Virtual swapped int -> 5
+                 * Virtual swapped float -> 37
+                 * 
+                 * swapped_mask is equivalent to swapped_mask & rs1_virtual_mask
+                 */
+                allocated_rs1 = allocated_rs1 | actual_regs | (5_m256i & (swapped_mask & ~need_float_mask));
+                allocated_rs1 = allocated_rs1 | (37_m256i & (swapped_mask & need_float_mask));
+            }
+
+            const m256i rs2 = epi32::maskload(this->rs2_avx.m256i(i), used_mask);
+            const m256i rs2_virtual_mask = (rs2 > 63);
+            const m256i rs2_adjusted = rs2 - 64;
+            m256i rs2_load_offset = epi32::from_value(-1);
+            m256i rs2_stack_offset = epi32::zero();
+            m256i allocated_rs2 = rs2 & ~rs2_virtual_mask;
+            if (!epi32::is_zero(rs2_virtual_mask)) {
+                const m256i swapped_mask = epi32::maskgatherz(symbol_swapped.data(), rs2_adjusted, rs2_virtual_mask);
+
+                rs2_load_offset = ~swapped_mask | (base_offset + (1_m256i & (rs2_load_offset > 0)));
+                rs2_stack_offset = epi32::maskgatherz(spill_offsets.data(), rs2_adjusted, rs2_virtual_mask);
+
+                /* rs2 is never float except with generic float instructions */
+                const m256i need_float_mask = ((instr & 0b1111111) == 0b1010011);
+
+                const m256i actual_regs = epi32::maskgatherz(symbol_registers.data(), rs2_adjusted, rs2_virtual_mask & ~swapped_mask);
+                allocated_rs2 = allocated_rs2 | actual_regs | (6_m256i & (swapped_mask & ~need_float_mask));
+                allocated_rs2 = allocated_rs2 | (38_m256i & (swapped_mask & need_float_mask));
+            }
+
+            const m256i main_instr_offset = (base_offset + (1_m256i & (rs1_load_offset > 0)) + (1_m256i & (rs2_load_offset > 0)));
+
+            const m256i rd = epi32::maskload(this->rd_avx.m256i(i), used_mask);
+            const m256i rd_virtual_mask = (rd > 63);
+            const m256i rd_adjusted = rd - 64;
+            m256i rd_offset = epi32::from_value(-1);
+            m256i rd_stack_offset = epi32::zero();
+            m256i allocated_rd = rd & ~rd_virtual_mask;
+            if (!epi32::is_zero(rd_virtual_mask)) {
+                const m256i swapped_mask = epi32::maskgatherz(symbol_swapped.data(), rd_adjusted, rd_virtual_mask);
+
+                rd_offset = ~swapped_mask | (main_instr_offset + 1);
+                rd_stack_offset = epi32::maskgatherz(spill_offsets.data(), rd_adjusted, rd_virtual_mask);
+
+                /* rd doesn't need to be loaded in beforehand */
+                allocated_rd = allocated_rd | epi32::maskgatherz(symbol_registers.data(), rd_adjusted, rd_virtual_mask);
+            }
+
+            //const m256i func_id = epi32::maskload(reverse_func_id_map.m256i(i), used_mask) - 1;
+            
+            /* Construct the rs1 and rs2 loads */
+            const m256i rs1_instr = (((rs1_stack_offset - 1) * 4) << 20) | 0b0000000'00000'00000'010'00000'0000011;
+            const m256i rs2_instr = (((rs2_stack_offset - 1) * 4) << 20) | 0b0000000'00000'00000'010'00000'0000011;
+
+            /* And the rd store */
+            m256i rd_instr = 0b0000000'00000'00000'010'00000'0100011_m256i;
+            {
+                const m256i imm = ((rd_stack_offset - 1) * -4);
+                rd_instr = rd_instr | ((imm & 0x1f) << 7) | ((imm & 0xfe) << 19);
+            }
+
+            /* rs1 */
+            {
+                AVX_ALIGNED auto rs1_load_offset_array = epi32::extract(rs1_load_offset);
+                AVX_ALIGNED auto rs1_instr_array = epi32::extract(rs1_instr);
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (int idx = rs1_load_offset_array[j]; idx >= 0) {
+                        new_instr[idx] = rs1_instr_array[j];
+                        new_rd[idx] = 5;
+                    }
+                }
+            }
+
+            /* rs2 */
+            {
+                AVX_ALIGNED auto rs2_load_offset_array = epi32::extract(rs2_load_offset);
+                AVX_ALIGNED auto rs2_instr_array = epi32::extract(rs2_instr);
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (int idx = rs2_load_offset_array[j]; idx >= 0) {
+                        new_instr[idx] = rs2_instr_array[j];
+                        new_rd[idx] = 6;
+                    }
+                }
+            }
+
+            /* Main instruction */
+            {
+                AVX_ALIGNED auto main_instr_offset_array = epi32::extract(main_instr_offset);
+                AVX_ALIGNED auto allocated_rd_array = epi32::extract(allocated_rd);
+                AVX_ALIGNED auto allocated_rs1_array = epi32::extract(allocated_rs1);
+                AVX_ALIGNED auto allocated_rs2_array = epi32::extract(allocated_rs2);
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (int idx = main_instr_offset_array[j]; idx >= 0) {
+                        new_instr[idx] = this->instr[(8 * i) + j];
+                        new_rd[idx] = allocated_rd_array[j];
+                        new_rs1[idx] = allocated_rs1_array[j];
+                        new_rs2[idx] = allocated_rs2_array[j];
+                        new_jt[idx] = instr_offsets[jt_avx[(8 * i) + j]];
+                    }
+                }
+            }
+
+            /* rd store */
+            {
+                AVX_ALIGNED auto rd_offset_array = epi32::extract(rd_offset);
+                AVX_ALIGNED auto rd_instr_array = epi32::extract(rd_instr);
+                AVX_ALIGNED auto allocated_rd_array = epi32::extract(allocated_rd);
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (int idx = rd_offset_array[j]; idx >= 0) {
+                        new_instr[idx] = rd_instr_array[j];
+                        new_rs1[idx] = allocated_rd_array[j];
+                    }
+                }
+            }
+        }
+    }
+
+    instr = new_instr;
+    rd_avx = new_rd;
+    rs1_avx = new_rs1;
+    rs2_avx = new_rs2;
+    jt_avx = new_jt;
+
+    dump_instrs();
 }

@@ -881,7 +881,7 @@ void rv_generator_st::optimize() {
 }
 
 void rv_generator_st::regalloc() {
-    dump_instrs();
+    //dump_instrs();
     
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
     uint32_t max_func_size = std::ranges::max(function_sizes);
@@ -1238,12 +1238,6 @@ void rv_generator_st::regalloc() {
         }
     }
 
-    for (uint32_t i = 0; i < symbol_registers.size(); ++i) {
-        std::cerr << i << ": " << int(symbol_registers[i].reg) << " " << (symbol_registers[i].swapped ? "swapped" : "") << '\n';
-    }
-    //dump_instrs();
-    //return;
-
     for (size_t i = 0; i < preserve_masks.size(); ++i) {
         // TODO surely this should include s0?
         /* s1-s11, fs0-fs11 are callee-saved, they won't be considered "used" */
@@ -1297,6 +1291,7 @@ void rv_generator_st::regalloc() {
         for (size_t i = 0; i < func_count; ++i) {
             /* Number of registers that need to be preserved */
             auto preserved = std::popcount(preserve_masks[i]);
+            
             auto start = func_starts[i] + 5;
             auto end = func_starts[i] + function_sizes[i] - 6;
 
@@ -1313,14 +1308,16 @@ void rv_generator_st::regalloc() {
     for (size_t i = 0; i < instructions.size(); ++i) {
         instr_counts[i] = count_instr(static_cast<uint32_t>(i), symbol_registers, used_instrs);
     }
-    //std::cerr << instr_counts << '\n';
+    
     /* Add space for the instructions to store callee-saved registers */
     count_instr_add_preserve(preserve_masks, instr_counts);
-
+    
+    //dump_instrs();
     /* New instruction offsets that take spills into account */
     auto instr_offsets = avx_buffer<int64_t>::zero(instructions.size());
     std::exclusive_scan(instr_counts.begin(), instr_counts.end(), instr_offsets.begin(), 0ll);
-
+    //std::cerr << instr_offsets << "\n";
+    
     /* Total number of instructions */
     int64_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
 
@@ -1490,6 +1487,9 @@ void rv_generator_st::regalloc() {
     rs1 = new_rs1;
     rs2 = new_rs2;
     jt = new_jt;
+
+    dump_instrs();
+    return;
 
     fix_func_tab(instr_offsets);
 

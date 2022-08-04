@@ -303,7 +303,6 @@ namespace simd::epi32_operators {
         return _mm256_xor_si256(lhs, rhs);
     }
 
-
     FORCE_INLINE m256i operator+(m256i lhs, m256i rhs) {
         return _mm256_add_epi32(lhs, rhs);
     }
@@ -353,6 +352,10 @@ namespace simd::epi32_operators {
 
     FORCE_INLINE m256i operator^(m256i lhs, int rhs) {
         return lhs ^ _mm256_set1_epi32(rhs);
+    }
+
+    FORCE_INLINE m256i operator<<(m256i lhs, int rhs) {
+        return _mm256_slli_epi32(lhs, rhs);
     }
 
 
