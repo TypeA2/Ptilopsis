@@ -1026,24 +1026,22 @@ void rv_generator_avx::regalloc() {
                     epi64::maskstore(&lifetime_mask_array[0], epi32::expand32_64_lo(rd_virtual_mask), adjusted_lifetime_mask_lo);
                     epi64::maskstore(&lifetime_mask_array[4], epi32::expand32_64_hi(rd_virtual_mask), adjusted_lifetime_mask_hi);
                     
-                    std::cerr << format<32, true>(rd_virtual_mask) << "\n";
                     for (uint32_t k = 0; k < 8; ++k) {
                         /* For every virtual register in rd, obtain a physical register to assign, and store into rd */
                         if (rd_virtual_mask_array[k]) {
                             const m256i mask = epi32::from_values((k == 0) ? 0 : -1, (k == 1) ? 0 : -1, (k == 2) ? 0 : -1, (k == 3) ? 0 : -1,
                                 (k == 4) ? 0 : -1, (k == 5) ? 0 : -1, (k == 6) ? 0 : -1, (k == 7) ? 0 : -1);
-                            rd = (rd & mask) | ptilopsis::ffz(lifetime_mask_array[k]);
-                            std::cerr << format<32, true>(mask) << "\n";
+                            rd = (rd & mask) | (~mask & ptilopsis::ffz(lifetime_mask_array[k]));
+                            //std::cerr << format<32, true>(mask) << "\n";
                         }
                     }
-                    std::cerr << "\n";
 
                     /* If a register is 64, no register was found, so allocate a temporary based on type */
                     const m256i rd_overflow_mask = (rd == 64);
                     rd = (rd & ~rd_overflow_mask) | (37_m256i & (rd_overflow_mask & rd_float_mask)) | (5_m256i & (rd_overflow_mask & ~rd_float_mask));
                     rd = rd & non_call_mask;
                 }
-                //std::cerr << "offsets: " << format<32, true>(instr_offset) << '\n' << "original rd:" << original_rd << "\nrd: " << rd << '\n';
+                
                 /* If rs1 or rs2 were in use before this, they need to be marked as swapped */
                 const m256i non_call_mask_lo = epi32::expand32_64_lo(non_call_mask);
                 const m256i non_call_mask_hi = epi32::expand32_64_hi(non_call_mask);
@@ -1065,7 +1063,7 @@ void rv_generator_avx::regalloc() {
                 /* Same but for rs2 */
                 const m256i rs2_registers_lo = epi32::expand32_64_lo(rs2_registers);
                 const m256i rs2_registers_hi = epi32::expand32_64_hi(rs2_registers);
-
+                
                 const m256i rs2_mask_lo = _mm256_sllv_epi64(one, rs2_registers_lo) & non_call_mask_lo;
                 const m256i rs2_mask_hi = _mm256_sllv_epi64(one, rs2_registers_hi) & non_call_mask_hi;
 
@@ -1078,7 +1076,6 @@ void rv_generator_avx::regalloc() {
                 /* Similar for rd, except use the cleared_lifetime_mask, since rs1 and rs2 are free at the moment rd is used */
                 const m256i rd_registers_lo = epi32::expand32_64_lo(rd);
                 const m256i rd_registers_hi = epi32::expand32_64_hi(rd);
-
                 const m256i rd_mask_lo = _mm256_sllv_epi64(one, rd_registers_lo) & non_call_mask_lo;
                 const m256i rd_mask_hi = _mm256_sllv_epi64(one, rd_registers_hi) & non_call_mask_hi;
 
@@ -1130,12 +1127,8 @@ void rv_generator_avx::regalloc() {
                 }
 
                 /* Set rd to be in use and store in the lifetime mask and store */
-                //std::cerr << "lifetime: " << format<64, true>(lifetime_mask_lo) << format<64, true>(lifetime_mask_hi) << "\n";
-                //std::cerr << "cleared lifetime: " << format<64, true>(cleared_lifetime_mask_lo) << format<64, true>(cleared_lifetime_mask_hi) << "\n";
-                //std::cerr << "final: " << format<64, true>(cleared_lifetime_mask_lo | rd_mask_lo) << format<64, true>(cleared_lifetime_mask_hi | rd_mask_hi) << "\n";
-
-                epi64::maskstore(lifetime_masks.m256i(2 * j), cleared_lifetime_mask_lo | rd_mask_lo, epi32::expand32_64_lo(non_call_mask));
-                epi64::maskstore(lifetime_masks.m256i((2 * j) + 1), cleared_lifetime_mask_hi | rd_mask_hi, epi32::expand32_64_hi(non_call_mask));
+                epi64::maskstore(lifetime_masks.m256i(2 * j), non_call_mask_lo, cleared_lifetime_mask_lo | rd_mask_lo);
+                epi64::maskstore(lifetime_masks.m256i((2 * j) + 1), non_call_mask_hi, cleared_lifetime_mask_hi | rd_mask_hi);
 
                 /* Mark the physical registers rd as mapping to their virtual registers */
                 {

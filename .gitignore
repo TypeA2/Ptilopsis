@@ -14,3 +14,4 @@ subprojects/range-v3-*
 *.pdf
 *.s
 *.out
+Intel Intrinsics Guide/
