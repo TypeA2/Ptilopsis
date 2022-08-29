@@ -1305,7 +1305,7 @@ void rv_generator_avx::regalloc() {
         const m256i used_mask = epi32::load(this->used_instrs_avx.m256i(i));
         if (!epi32::is_zero(used_mask)) {
             /* Starting offsets for the instructions */
-            const m256i base_offset = epi32::maskload(instr_offsets.m256i(i), used_mask);
+            const m256i base_offset = epi32::maskload(instr_offsets.m256i(i), used_mask) | (epi32::from_value(-1) & ~used_mask);
             const m256i instr = epi32::maskload(this->instr.m256i(i), used_mask);
 
             const m256i rs1 = epi32::maskload(this->rs1_avx.m256i(i), used_mask);
@@ -1444,6 +1444,8 @@ void rv_generator_avx::regalloc() {
         }
     }
 
+    auto overflows = avx_buffer<uint32_t>::zero(func_count);
+    
     instr = new_instr;
     rd_avx = new_rd;
     rs1_avx = new_rs1;
@@ -1452,15 +1454,50 @@ void rv_generator_avx::regalloc() {
 
     fix_func_tab_avx(instr_offsets);
 
-    //dump_instrs();
-    //std::cerr << func_starts << "\n";
-    //std::cerr << function_sizes << "\n";
-    //std::cerr << func_ends << "\n";
+    /* For every function... */
+    for (uint32_t i = 0; i < func_starts.size_m256i(); ++i) {
+        /* Store and load all callee-saved registers touched by this function */
+        uint32_t base = i * 8;
+        const m256i valid_mask = (epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7) + base) < static_cast<int>(func_starts.size());
+        AVX_ALIGNED auto valid_mask_array = epi32::extract(valid_mask);
+
+        const m256i preserve_counts = epi32::from_values(
+            valid_mask_array[0] ? std::popcount(preserve_masks[base + 0]) : 0,
+            valid_mask_array[1] ? std::popcount(preserve_masks[base + 1]) : 0,
+            valid_mask_array[2] ? std::popcount(preserve_masks[base + 2]) : 0,
+            valid_mask_array[3] ? std::popcount(preserve_masks[base + 3]) : 0,
+            valid_mask_array[4] ? std::popcount(preserve_masks[base + 4]) : 0,
+            valid_mask_array[5] ? std::popcount(preserve_masks[base + 5]) : 0,
+            valid_mask_array[6] ? std::popcount(preserve_masks[base + 6]) : 0,
+            valid_mask_array[7] ? std::popcount(preserve_masks[base + 7]) : 0
+        );
+
+        const m256i stack_size = (epi32::maskload(stack_sizes.m256i(i), valid_mask) + epi32::maskload(overflows.m256i(i), valid_mask) + preserve_counts + 2) * 4;
+        const m256i lower = (stack_size & 0xFFF) << 20;
+        const m256i upper = (stack_size & 0xFFFFF000);
+
+        const m256i upper_instr = upper | 0b0000000'00000'00000'000'01000'0110111;
+        const m256i lower_instr = lower | 0b0000000'00000'01000'000'01000'0010011;
+
+        AVX_ALIGNED auto upper_instr_array = epi32::extract(upper_instr);
+        AVX_ALIGNED auto lower_instr_array = epi32::extract(lower_instr);
+
+        const m256i starts = epi32::maskload(func_starts.m256i(i), valid_mask);
+        const m256i ends = starts + epi32::maskload(function_sizes.m256i(i), valid_mask);
+        
+        scatter_regalloc_fixup(valid_mask_array, starts + 2, upper_instr_array);
+        scatter_regalloc_fixup(valid_mask_array, starts + 3, lower_instr_array);
+
+        scatter_regalloc_fixup(valid_mask_array, ends - 6, upper_instr_array);
+        scatter_regalloc_fixup(valid_mask_array, ends - 5, lower_instr_array);
+    }
+
+    dump_instrs();
 }
 
 void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {
     /* Re-calculate function table based on new offsets */
-    for (size_t i = 0; i < func_starts.size_m256i(); ++i) {
+    for (uint32_t i = 0; i < func_starts.size_m256i(); ++i) {
         const m256i func_start_indices = epi32::load(func_starts.m256i(i));
         const m256i func_start_offsets = epi32::gather(instr_offsets.data(), func_start_indices);
         const m256i func_end_indices = func_start_indices + epi32::load(function_sizes.m256i(i));
@@ -1472,5 +1509,19 @@ void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {
         epi32::store(func_starts.m256i(i), func_start_offsets);
         epi32::store(func_ends.m256i(i), func_end_offsets);
         epi32::store(function_sizes.m256i(i), func_sizes);
+    }
+}
+
+void rv_generator_avx::scatter_regalloc_fixup(const std::span<int, 8> valid_mask, const m256i indices, const std::span<int, 8> opwords) {
+    AVX_ALIGNED auto indices_array = epi32::extract(indices);
+    for (uint32_t i = 0; i < 8; ++i) {
+        if (uint32_t valid = valid_mask[i]; valid) {
+            uint32_t idx = indices_array[i];
+            instr[idx] = opwords[i];
+            rd_avx[idx] = 0;
+            rs1_avx[idx] = 0;
+            rs2_avx[idx] = 0;
+            jt_avx[idx] = 0;
+        }
     }
 }

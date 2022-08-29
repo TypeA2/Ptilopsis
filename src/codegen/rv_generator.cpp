@@ -1490,14 +1490,6 @@ void rv_generator_st::regalloc() {
 
     fix_func_tab(instr_offsets);
 
-    //dump_instrs();
-    //std::cerr << func_starts << "\n";
-    //std::cerr << function_sizes << "\n";
-    //std::cerr << func_ends << "\n";
-    return;
-
-    //dump_instrs();
-
     auto scatter_indices = avx_buffer<int64_t>::zero(func_count * 4ull);
     auto scatter_opcodes = avx_buffer<uint32_t>::zero(func_count * 4ull);
     for (size_t i = 0; i < func_count; ++i) {
@@ -1589,7 +1581,9 @@ void rv_generator_st::regalloc() {
             jt[all_indices[i]] = 0;
         }
     }
-    //dump_instrs();
+    
+    dump_instrs();
+    return;
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {

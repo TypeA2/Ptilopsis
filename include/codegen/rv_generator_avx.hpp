@@ -26,4 +26,6 @@ class rv_generator_avx : public rv_generator_st {
     void optimize() override;
     void regalloc() override;
     void fix_func_tab_avx(std::span<uint32_t> instr_offsets);
+
+    void scatter_regalloc_fixup(const std::span<int, 8> valid_mask, const m256i indices, const std::span<int, 8> opwords);
 };
