@@ -1450,5 +1450,27 @@ void rv_generator_avx::regalloc() {
     rs2_avx = new_rs2;
     jt_avx = new_jt;
 
-    dump_instrs();
+    fix_func_tab_avx(instr_offsets);
+
+    //dump_instrs();
+    //std::cerr << func_starts << "\n";
+    //std::cerr << function_sizes << "\n";
+    //std::cerr << func_ends << "\n";
+}
+
+void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {
+    /* Re-calculate function table based on new offsets */
+    for (size_t i = 0; i < func_starts.size_m256i(); ++i) {
+        const m256i func_start_indices = epi32::load(func_starts.m256i(i));
+        const m256i func_start_offsets = epi32::gather(instr_offsets.data(), func_start_indices);
+        const m256i func_end_indices = func_start_indices + epi32::load(function_sizes.m256i(i));
+        const m256i past_end_mask = (func_end_indices >= static_cast<int>(instr_offsets.size()));
+
+        const m256i func_end_offsets = (past_end_mask & epi32::from_value(instr_offsets.back() + 1)) | epi32::maskgatherz(instr_offsets.data(), func_end_indices, ~past_end_mask);
+        const m256i func_sizes = func_end_offsets - func_start_offsets;
+
+        epi32::store(func_starts.m256i(i), func_start_offsets);
+        epi32::store(func_ends.m256i(i), func_end_offsets);
+        epi32::store(function_sizes.m256i(i), func_sizes);
+    }
 }

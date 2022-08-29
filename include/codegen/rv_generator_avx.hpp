@@ -25,4 +25,5 @@ class rv_generator_avx : public rv_generator_st {
     void isn_gen() override;
     void optimize() override;
     void regalloc() override;
+    void fix_func_tab_avx(std::span<uint32_t> instr_offsets);
 };
