@@ -102,7 +102,7 @@ std::ostream& rv_generator::print(std::ostream& os, bool disassemble) const {
         os << '\n';
     }
 #endif
-
+    
     if (disassemble && !get_instructions().empty()) {
         std::vector<uint64_t> func_starts { this->func_starts.begin(), this->func_starts.end() };
         rvdisasm::disassemble(os, get_instructions(), 0, func_starts);
@@ -114,11 +114,12 @@ std::ostream& rv_generator::print(std::ostream& os, bool disassemble) const {
 }
 
 std::ostream& rv_generator::to_binary(std::ostream& os) const {
-    return os.write(reinterpret_cast<const char*>(instructions.data()), instructions.size() * 4);
+    auto instr = get_instructions();
+    return os.write(reinterpret_cast<const char*>(instr.data()), instr.size_bytes());
 }
 
 std::ostream& rv_generator::to_asm(std::ostream& os) const {
-    for (uint32_t instr : instructions) {
+    for (uint32_t instr : get_instructions()) {
         os << rvdisasm::instruction(instr) << '\n';
     }
 
@@ -131,6 +132,7 @@ void rv_generator_st::process() {
     durations.reserve(7);
 
     auto time = [this, &durations](std::string_view name, void(rv_generator_st::* func)()) {
+        std::cerr << name << "           " << "\r";
         auto begin = std::chrono::steady_clock::now();
         (this->*func)();
         auto end = std::chrono::steady_clock::now();
@@ -147,7 +149,7 @@ void rv_generator_st::process() {
     time("postprocess", &rv_generator_st::postprocess);
 
     std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});
-    dump_instrs();
+    
     size_t name_length = 1 + std::ranges::max(durations | std::views::transform(&pair_type::first) | std::views::transform(&std::string_view::size));
 
     auto to_time_str = [](std::chrono::nanoseconds ns) {
