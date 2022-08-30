@@ -1458,6 +1458,8 @@ void rv_generator_avx::regalloc() {
     for (uint32_t i = 0; i < func_starts.size_m256i(); ++i) {
         /* Store and load all callee-saved registers touched by this function */
         uint32_t base = i * 8;
+
+        /* There's always 1 valid, otherwise we wouldn't be here */
         const m256i valid_mask = (epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7) + base) < static_cast<int>(func_starts.size());
         AVX_ALIGNED auto valid_mask_array = epi32::extract(valid_mask);
 
@@ -1472,7 +1474,8 @@ void rv_generator_avx::regalloc() {
             valid_mask_array[7] ? std::popcount(preserve_masks[base + 7]) : 0
         );
 
-        const m256i stack_size = (epi32::maskload(stack_sizes.m256i(i), valid_mask) + epi32::maskload(overflows.m256i(i), valid_mask) + preserve_counts + 2) * 4;
+        const m256i stack_overflow_size = 2_m256i + epi32::maskload(stack_sizes.m256i(i), valid_mask) + epi32::maskload(overflows.m256i(i), valid_mask);
+        const m256i stack_size = (stack_overflow_size + preserve_counts) * 4;
         const m256i lower = (stack_size & 0xFFF) << 20;
         const m256i upper = (stack_size & 0xFFFFF000);
 
@@ -1490,9 +1493,62 @@ void rv_generator_avx::regalloc() {
 
         scatter_regalloc_fixup(valid_mask_array, ends - 6, upper_instr_array);
         scatter_regalloc_fixup(valid_mask_array, ends - 5, lower_instr_array);
-    }
 
-    dump_instrs();
+        /* Insert stores for every preserved register */
+        const m256i preserve_stack_offset = stack_overflow_size * 4;
+        const m256i p_mask_lo = epi64::maskload(preserve_masks.m256i((2 * i) + 0), epi32::expand32_64_lo(valid_mask));
+        const m256i p_mask_hi = epi64::maskload(preserve_masks.m256i((2 * i) + 1), epi32::expand32_64_hi(valid_mask));
+
+        /* For every register */
+        for (uint32_t j = 0; j < 64; ++j) {
+            /* The number of registers before this one, aka the logical index of the store instr for this reg */
+            const m256i reg_mask = epi64::from_value(1ull << j);
+
+            const m256i should_preserve_mask_lo = p_mask_lo & reg_mask;
+            const m256i should_preserve_mask_hi = p_mask_hi & reg_mask;
+
+            if (!epi32::is_zero(should_preserve_mask_lo) || !epi32::is_zero(should_preserve_mask_hi)) {
+                const m256i leading_mask = _mm256_sub_epi64(reg_mask, 1_m256i);
+                const m256i leading_lo = p_mask_lo & leading_mask;
+                const m256i leading_hi = p_mask_hi & leading_mask;
+
+                AVX_ALIGNED std::array<uint64_t, 8> leading_array;
+                epi64::store(leading_array.data(), leading_lo);
+                epi64::store(leading_array.data() + 4, leading_hi);
+                const m256i leading = epi32::from_values(
+                    std::popcount(leading_array[0]),
+                    std::popcount(leading_array[1]),
+                    std::popcount(leading_array[2]),
+                    std::popcount(leading_array[3]),
+                    std::popcount(leading_array[4]),
+                    std::popcount(leading_array[5]),
+                    std::popcount(leading_array[6]),
+                    std::popcount(leading_array[7])
+                );
+
+                const m256i offset = epi32::from_value(-1) * (preserve_stack_offset + leading * 4);
+                const m256i store_offset_high = (offset & 0xFE0) << 25;
+                const m256i store_offset_low = (offset & 0x1F) << 7;
+                const uint32_t reg = (j & 0b11111);
+
+                {
+                    const uint32_t store_opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0100111 : 0b0000000'00000'01000'010'00000'0100011;
+                    const m256i store_instr = store_offset_high | store_offset_low | (reg << 20) | store_opcode;
+
+                    AVX_ALIGNED auto store_instr_array = epi32::extract(store_instr);
+                    scatter_regalloc_fixup(valid_mask_array, starts + leading + 6, store_instr_array);
+                }
+
+                {
+                    const uint32_t load_opcode = (j >= 32) ? 0b0000000'00000'01000'010'00000'0000111 : 0b0000000'00000'01000'010'00000'0000011;
+                    const m256i load_instr = (offset << 20) | (reg << 7) | load_opcode;
+
+                    AVX_ALIGNED auto load_instr_array = epi32::extract(load_instr);
+                    scatter_regalloc_fixup(valid_mask_array, ends + leading - 7, load_instr_array);
+                }
+            }
+        }
+    }
 }
 
 void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {

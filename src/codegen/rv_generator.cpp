@@ -1518,7 +1518,7 @@ void rv_generator_st::regalloc() {
             int64_t leading = std::popcount(p_mask & ((1ull << j) - 1));
             int64_t offset = -(preserve_stack_offset + leading * 4);
             uint32_t offset_high = (offset & 0xFE0u) << 25;
-            uint32_t offset_low = (offset & 0x1Fu) < 7;
+            uint32_t offset_low = (offset & 0x1Fu) << 7;
             uint32_t src = (j % 32) << 20;
             uint32_t store_const = offset_high | offset_low | src;
             /* fsw or sw */
@@ -1581,9 +1581,6 @@ void rv_generator_st::regalloc() {
             jt[all_indices[i]] = 0;
         }
     }
-    
-    dump_instrs();
-    return;
 }
 
 void rv_generator_st::fix_func_tab(std::span<int64_t> instr_offsets) {
