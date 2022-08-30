@@ -68,7 +68,7 @@ class atomic_barrier {
     }
 
     void lock() noexcept {
-        should_wait.store(true, std::memory_order_acquire);
+        should_wait.store(true, std::memory_order_release);
     }
 
     void unlock() noexcept {

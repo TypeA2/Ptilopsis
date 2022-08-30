@@ -132,7 +132,6 @@ void rv_generator_st::process() {
     durations.reserve(7);
 
     auto time = [this, &durations](std::string_view name, void(rv_generator_st::* func)()) {
-        std::cerr << name << "           " << "\r";
         auto begin = std::chrono::steady_clock::now();
         (this->*func)();
         auto end = std::chrono::steady_clock::now();

@@ -26,6 +26,7 @@ int main(int argc, char** argv) {
     bool debug = false;
     bool simple = false;
     bool tree = false;
+    int threads = -1;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -35,7 +36,8 @@ int main(int argc, char** argv) {
         ("h,help", "Print usage")
         ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"))
         ("s,simple", "Use simple compiler instead of AVX compiler", cxxopts::value<bool>()->default_value("false"))
-        ("t,tree", "Print tree info", cxxopts::value<bool>()->default_value("false"));
+        ("f,tree", "Print tree info", cxxopts::value<bool>()->default_value("false"))
+        ("t,threads", "Number of threads to use in the AVX implementation (-1 means total - 1)", cxxopts::value<int>()->default_value("-1"));
 
     options.parse_positional("infile");
     options.custom_help("<input> [-S] [-o <outfile>]");
@@ -61,6 +63,7 @@ int main(int argc, char** argv) {
         debug = res["debug"].as<bool>();
         simple = res["simple"].as<bool>();
         tree = res["tree"].as<bool>();
+        threads = res["threads"].as<int>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -108,7 +111,7 @@ int main(int argc, char** argv) {
         if (simple) {
             gen = std::make_unique<rv_generator_st>(depth_tree);
         } else {
-            gen = std::make_unique<rv_generator_avx>(depth_tree);
+            gen = std::make_unique<rv_generator_avx>(depth_tree, threads);
         }
 
         if (debug || tree) {
