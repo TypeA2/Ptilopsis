@@ -17,6 +17,10 @@ using namespace simd::epi32_operators;
 namespace epi32 = simd::epi32;
 namespace epi64 = simd::epi64;
 
+std::span<uint32_t> rv_generator_avx::get_instructions() const {
+    return instr;
+}
+
 void rv_generator_avx::dump_instrs() {
     std::cout << rvdisasm::color::extra << " == " << instr.size() << " instructions ==             rd rs1 rs2 jt\n" << rvdisasm::color::white;
     size_t digits = static_cast<size_t>(std::log10(instr.size()) + 1);
@@ -1579,5 +1583,137 @@ void rv_generator_avx::scatter_regalloc_fixup(const std::span<int, 8> valid_mask
             rs2_avx[idx] = 0;
             jt_avx[idx] = 0;
         }
+    }
+}
+
+void rv_generator_avx::fix_jumps() {
+    avx_buffer<uint32_t> instr_sizes { instr.size() };
+    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+        const m256i instr_word = epi32::load(instr.m256i(i));
+        const m256i is_jump_mask = ((instr_word & 0b1111111) == 0b1100111) & (instr_word != 0b0000000'00000'00001'000'00000'1100111);
+        const m256i nonzero_mask = (instr_word != 0);
+        const m256i instr_size = (2_m256i & is_jump_mask) | (1_m256i & (nonzero_mask & ~is_jump_mask));
+        epi32::store(instr_sizes.m256i(i), instr_size);
+    }
+
+    /* Exclusive scan */
+    // TODO make this generic again
+    avx_buffer<uint32_t> instr_offsets { instr.size() };
+    m256i offset = epi32::zero();
+    for (uint32_t i = 0; i < instr_sizes.size_m256i(); ++i) {
+        m256i vals = epi32::loadu(&instr_sizes[i * 8] - 1);
+
+        vals = vals + _mm256_slli_si256_dual<4>(vals);
+        vals = vals + _mm256_slli_si256_dual<8>(vals);
+        vals = vals + _mm256_slli_si256_dual<16>(vals);
+
+        vals = vals + offset;
+
+        offset = _mm256_permutevar8x32_epi32(vals, 7_m256i);
+
+        epi32::store(instr_offsets.m256i(i), vals);
+    }
+
+    uint32_t instr_count = instr_sizes.back() + instr_offsets.back();
+
+    avx_buffer<uint32_t> new_instr { instr_count };
+    avx_buffer<uint32_t> new_rd { instr_count };
+    avx_buffer<uint32_t> new_rs1 { instr_count };
+    avx_buffer<uint32_t> new_rs2 { instr_count };
+    avx_buffer<uint32_t> new_jt { instr_count };
+
+    for (uint32_t i = 0; i < instr_offsets.size(); ++i) {
+        uint32_t idx = instr_offsets[i];
+        new_instr[idx] = instr[i];
+        new_rd[idx] = rd_avx[i];
+        new_rs1[idx] = rs1_avx[i];
+        new_rs2[idx] = rs2_avx[i];
+        new_jt[idx] = jt_avx[i];
+    }
+
+    for (uint32_t i = 0; i < new_instr.size_m256i(); ++i) {
+        const m256i indices = epi32::load(new_jt.m256i(i));
+        epi32::store(new_jt.m256i(i), epi32::gather(instr_offsets.data(), indices));
+    }
+
+    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+        const m256i indices = epi32::load(instr_offsets.m256i(i));
+        const m256i instrs = epi32::gather(new_instr.data(), indices);
+
+        const m256i is_jump_mask = ((instrs & 0b1111111) == 0b1100111) & (instrs != 0b0000000'00000'00001'000'00000'1100111);
+        const m256i is_branch_mask = ((instrs & 0b1111111) == 0b1100011);
+
+        bool has_jump = !epi32::is_zero(is_jump_mask);
+        bool has_branch = !epi32::is_zero(is_branch_mask);
+
+        if (has_jump || has_branch) {
+            const m256i target = 4_m256i * epi32::maskgatherz(new_jt.data(), indices, is_jump_mask | is_branch_mask);
+            const m256i delta = target - (indices * 4);
+
+            AVX_ALIGNED auto indices_array = epi32::extract(indices);
+
+            if (has_jump) {
+                const m256i upper = (delta & 0xFFFFF000) >> 12;
+                const m256i lower = (delta & 0xFFF);
+                const m256i sign = (delta >> 11) & 1;
+                const m256i auipc_instr = ((upper + sign) << 12) | 0b00001'0010111;
+
+                AVX_ALIGNED auto is_jump_array = epi32::extract(is_jump_mask);
+                AVX_ALIGNED auto auipc_instr_array = epi32::extract(auipc_instr);
+                AVX_ALIGNED auto instrs_array = epi32::extract(instrs | (lower << 20) | (1 << 15));
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (is_jump_array[j]) {
+                        int idx = indices_array[j];
+                        new_instr[idx] = auipc_instr_array[j];
+                        new_jt[idx] = 0;
+                        new_rd[idx] = 0;
+                        new_rs1[idx] = 0;
+                        new_rs2[idx] = 0;
+
+                        idx += 1;
+                        new_instr[idx] = instrs_array[j];
+                        new_jt[idx] = 0;
+                        new_rd[idx] = 0;
+                        new_rs1[idx] = 0;
+                        new_rs2[idx] = 0;
+                    }
+                }
+            }
+
+            if (has_branch) {
+                const m256i sign = (delta >> 12) & 1;
+                const m256i bit_11 = (delta >> 11) & 1;
+                const m256i bit_10_5 = (delta >> 5) & 0b11111;
+                const m256i bit_1_4 = (delta >> 1) & 0b1111;
+
+                AVX_ALIGNED auto is_branch_array = epi32::extract(is_branch_mask);
+                AVX_ALIGNED auto instrs_array = epi32::extract(instrs | (sign << 31) | (bit_11 << 7) | (bit_10_5 << 25) | (bit_1_4 << 8));
+                for (uint32_t j = 0; j < 8; ++j) {
+                    if (is_branch_array[j]) {
+                        new_instr[indices_array[j]] = instrs_array[j];
+                    }
+                }
+            }
+        }
+    }
+
+    instr = new_instr;
+    jt_avx = new_jt;
+    rd_avx = new_rd;
+    rs1_avx = new_rs1;
+    rs2_avx = new_rs2;
+
+    fix_func_tab_avx(instr_offsets);
+}
+
+void rv_generator_avx::postprocess() {
+    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
+        m256i instr = epi32::load(this->instr.m256i(i));
+
+        instr = instr | ((epi32::load(this->rd_avx.m256i(i)) & 0b11111) << 7);
+        instr = instr | ((epi32::load(this->rs1_avx.m256i(i)) & 0b11111) << 15);
+        instr = instr | ((epi32::load(this->rs2_avx.m256i(i)) & 0b11111) << 20);
+
+        epi32::store(this->instr.m256i(i), instr);
     }
 }

@@ -66,6 +66,8 @@ class rv_generator {
 
     virtual void process() = 0;
 
+    [[nodiscard]] virtual std::span<uint32_t> get_instructions() const = 0;
+
     std::ostream& print(std::ostream& os, bool disassemble = true) const;
     std::ostream& to_binary(std::ostream& os) const;
     std::ostream& to_asm(std::ostream& os) const;
@@ -82,6 +84,8 @@ class rv_generator_st : public rv_generator {
     using rv_generator::rv_generator;
 
     void process() override;
+
+    [[nodiscard]] std::span<uint32_t> get_instructions() const override;
 
     protected:
     virtual void dump_instrs();

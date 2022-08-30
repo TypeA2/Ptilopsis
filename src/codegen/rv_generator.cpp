@@ -103,9 +103,9 @@ std::ostream& rv_generator::print(std::ostream& os, bool disassemble) const {
     }
 #endif
 
-    if (disassemble && instructions) {
+    if (disassemble && !get_instructions().empty()) {
         std::vector<uint64_t> func_starts { this->func_starts.begin(), this->func_starts.end() };
-        rvdisasm::disassemble(os, instructions, 0, func_starts);
+        rvdisasm::disassemble(os, get_instructions(), 0, func_starts);
     }
 
     os.flags(f);
@@ -143,11 +143,11 @@ void rv_generator_st::process() {
     time("isn_gen", &rv_generator_st::isn_gen);
     time("optimize", &rv_generator_st::optimize);
     time("regalloc", &rv_generator_st::regalloc);
-    //time("fix_jumps", &rv_generator_st::fix_jumps);
-    //time("postprocess", &rv_generator_st::postprocess);
+    time("fix_jumps", &rv_generator_st::fix_jumps);
+    time("postprocess", &rv_generator_st::postprocess);
 
     std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});
-
+    dump_instrs();
     size_t name_length = 1 + std::ranges::max(durations | std::views::transform(&pair_type::first) | std::views::transform(&std::string_view::size));
 
     auto to_time_str = [](std::chrono::nanoseconds ns) {
@@ -185,6 +185,10 @@ void rv_generator_st::process() {
         << rvdisasm::color::instr << std::setw(name_length) << std::setfill(' ') << std::left << "Total"
         << rvdisasm::color::extra << std::setw(time_length) << std::setfill(' ') << std::right << total_str
         << rvdisasm::color::white << '\n';
+}
+
+std::span<uint32_t> rv_generator_st::get_instructions() const {
+    return instructions;
 }
 
 void rv_generator_st::dump_instrs() {
@@ -1641,7 +1645,7 @@ void rv_generator_st::fix_jumps() {
     for (int64_t i = 0; i < instr_count; ++i) {
         new_jt[i] = static_cast<uint32_t>(instr_offsets[new_jt[i]]);
     }
-
+    
     auto offsets = avx_buffer<int64_t>::zero(instructions.size() * 2);
     auto opcodes = avx_buffer<uint32_t>::zero(instructions.size() * 2);
     auto temp_rd = avx_buffer<int64_t>::zero(instructions.size() * 2);
@@ -1704,8 +1708,6 @@ void rv_generator_st::fix_jumps() {
     jt = new_jt;
 
     fix_func_tab(instr_offsets);
-
-    //dump_instrs();
 }
 
 void rv_generator_st::postprocess() {
