@@ -1189,18 +1189,18 @@ void rv_generator_st::regalloc() {
                 auto reg = swapped_registers[k][j];
                 if (reg < 0) {
                     /* Not swapped out, do nothing */
-                    swap_data_regs[(k * func_count) + j] = -1;
+                    swap_data_regs[(k * 64) + j] = -1;
                 } else {
                     /* Physical register j is swapped during this instruction */
                     
                     /* The virtual register being swapped */
-                    swap_data_regs[(k * func_count) + j] = reg_state_copy[k][reg] - 64;
+                    swap_data_regs[(k * 64) + j] = reg_state_copy[k][reg] - 64;
 
                     /* Reverse lookup for the physical register it's contained in */
-                    swap_data_sym[(k * func_count) + j] = get_symbol_data(symbol_registers, reg_state_copy[k][reg]);
+                    swap_data_sym[(k * 64) + j] = get_symbol_data(symbol_registers, reg_state_copy[k][reg]);
 
                     /* Mark it as swapped out*/
-                    swap_data_sym[(k * func_count) + j].swapped = true;
+                    swap_data_sym[(k * 64) + j].swapped = true;
                 }
             }
         }
