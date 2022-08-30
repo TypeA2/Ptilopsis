@@ -114,7 +114,7 @@ void rv_generator_avx::preprocess() {
                 m256i reg_offset = int_data + (float_args - (8_m256i & (float_args > 7)));
 
                 /* Offsets of 8 and above are put on the stack*/
-                m256i on_stack_mask = (reg_offset > 7);
+                m256i on_stack_mask = (reg_offset > 7) & int_data;
 
                 /* On the stack, so set 2nd bit */
                 types = types | (on_stack_mask & 0b10);
@@ -342,11 +342,13 @@ void rv_generator_avx::isn_cnt() {
     /* Function table generation */
     // TODO benchmark 1 vs 2 pass method (aka with vs without reallocations)
     size_t func_count = 0;
+    const m256i func_decl_src = epi32::from_enum(func_decl);
+
     for (size_t i = 0; i < node_types.size_m256i(); ++i) {
         m256i node_types = epi32::load(this->node_types.m256i(i));
 
         /* Count the number of function declarations*/
-        AVX_ALIGNED auto func_decl_mask = epi32::extract<uint32_t>(node_types == epi32::from_enum(func_decl));
+        AVX_ALIGNED auto func_decl_mask = epi32::extract<uint32_t>(node_types == func_decl_src);
         for (uint32_t f : func_decl_mask) {
             if (f) {
                 func_count += 1;

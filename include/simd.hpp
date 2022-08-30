@@ -532,7 +532,7 @@ namespace simd::epi64 {
 
     template <typename T>
     FORCE_INLINE m256i maskload(const T* ptr, m256i mask) {
-        return _mm256_maskload_epi64(reinterpret_cast<const int64_t*>(ptr), mask);
+        return _mm256_maskload_epi64(reinterpret_cast<const long long*>(ptr), mask);
     }
 
     template <typename T>
