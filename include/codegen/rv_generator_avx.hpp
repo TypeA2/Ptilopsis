@@ -2,6 +2,7 @@
 
 #include <array>
 #include <thread>
+#include <barrier>
 #include <functional>
 
 #include "codegen/rv_generator.hpp"
@@ -10,7 +11,7 @@
 /* SIMD-based generator */
 class rv_generator_avx : public rv_generator_st {
     public:
-    rv_generator_avx(const DepthTree& tree, int threads);
+    rv_generator_avx(const DepthTree& tree, int concurrency, int sync);
 
     ~rv_generator_avx() override;
 
@@ -29,13 +30,17 @@ class rv_generator_avx : public rv_generator_st {
     std::vector<std::thread> pool;
     std::vector<std::function<void()>> tasks;
 
-    counting_barrier task_start_sync { 0 };
-    atomic_barrier task_start = true;
-    atomic_barrier task_end = true;
+    int sync_mode;
 
-    counting_barrier task_end_sync { 0 };
+    std::barrier<> sync;
+
+    counting_barrier start_sync = 0;
+    counting_barrier end_sync = 0;
+    counting_barrier final_sync = 0;
 
     std::atomic_bool done = false;
+
+    void (rv_generator_avx::* run_func)();
 
     void dump_instrs() override;
 
@@ -50,8 +55,9 @@ class rv_generator_avx : public rv_generator_st {
 
     void scatter_regalloc_fixup(const std::span<int, 8> valid_mask, const m256i indices, const std::span<int, 8> opwords);
 
-    void thread_func(size_t idx);
+    void thread_func_barrier(size_t idx);
+    void run_barrier();
 
-    void start_task();
-    void run_task();
+    void thread_func_cv(size_t idx);
+    void run_cv();
 };

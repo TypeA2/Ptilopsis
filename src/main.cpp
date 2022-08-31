@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
     bool simple = false;
     bool tree = false;
     int threads = -1;
+    int cv = false;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -37,10 +38,11 @@ int main(int argc, char** argv) {
         ("d,debug", "Print debugging info", cxxopts::value<bool>()->default_value("false"))
         ("s,simple", "Use simple compiler instead of AVX compiler", cxxopts::value<bool>()->default_value("false"))
         ("f,tree", "Print tree info", cxxopts::value<bool>()->default_value("false"))
-        ("t,threads", "Number of threads to use in the AVX implementation (-1 means total - 1)", cxxopts::value<int>()->default_value("-1"));
+        ("t,threads", "Number of threads to use in the AVX implementation (-1 means total - 1)", cxxopts::value<int>()->default_value("-1"))
+        ("m,sync", "Synchronization mechanism (0 = barrier, 1 = custom spinlock)", cxxopts::value<int>()->default_value("0"));
 
     options.parse_positional("infile");
-    options.custom_help("<input> [-S] [-o <outfile>]");
+    options.custom_help("<infile> [-S] [-o <outfile>] [-d] [-s] [-f] [-t <threadnum>] [-m <syncmode>]");
     options.positional_help("");
 
     try {
@@ -64,6 +66,7 @@ int main(int argc, char** argv) {
         simple = res["simple"].as<bool>();
         tree = res["tree"].as<bool>();
         threads = res["threads"].as<int>();
+        cv = res["sync"].as<int>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -111,7 +114,7 @@ int main(int argc, char** argv) {
         if (simple) {
             gen = std::make_unique<rv_generator_st>(depth_tree);
         } else {
-            gen = std::make_unique<rv_generator_avx>(depth_tree, threads);
+            gen = std::make_unique<rv_generator_avx>(depth_tree, threads, cv);
         }
 
         if (debug || tree) {
