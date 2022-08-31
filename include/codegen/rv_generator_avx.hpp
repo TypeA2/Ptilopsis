@@ -11,7 +11,7 @@
 /* SIMD-based generator */
 class rv_generator_avx : public rv_generator_st {
     public:
-    rv_generator_avx(const DepthTree& tree, int concurrency, int sync);
+    rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock);
 
     ~rv_generator_avx() override;
 
@@ -31,6 +31,7 @@ class rv_generator_avx : public rv_generator_st {
     std::vector<std::function<void()>> tasks;
 
     int sync_mode;
+    bool altblock;
 
     std::barrier<> sync;
 

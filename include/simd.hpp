@@ -13,9 +13,11 @@
 
 #ifdef _MSC_VER
 #   define FORCE_INLINE __forceinline
+#   define FORCE_INLINE_LAMBDA [[msvc::forceinline]]
 using m256i = __m256i;
 #else
 #   define FORCE_INLINE inline __attribute__((__always_inline__))
+#   define FORCE_INLINE_LAMBDA FORCE_INLINE
 struct AVX_ALIGNED m256i {
     __m256i val;
 
