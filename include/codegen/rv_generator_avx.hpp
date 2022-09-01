@@ -11,7 +11,7 @@
 /* SIMD-based generator */
 class rv_generator_avx : public rv_generator_st {
     public:
-    rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock);
+    rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock, uint32_t mininstr);
 
     ~rv_generator_avx() override;
 
@@ -32,6 +32,7 @@ class rv_generator_avx : public rv_generator_st {
 
     int sync_mode;
     bool altblock;
+    uint32_t mininstr;
 
     std::barrier<> sync;
 
@@ -61,4 +62,35 @@ class rv_generator_avx : public rv_generator_st {
 
     void thread_func_cv(size_t idx);
     void run_cv();
+
+    template <typename Func>
+    FORCE_INLINE void run_basic(Func&& body, size_t elements, size_t min_elements) {
+        /* Number of elements per thread, minimum of min_elements */
+        size_t per_thread = std::max(min_elements, (elements + threads - 1) / threads);
+
+        /* Total number of threads used for this */
+        size_t threads_used = (elements + per_thread - 1) / per_thread;
+
+        for (size_t i = 0; i < threads; ++i) {
+            if (i >= threads_used) {
+                tasks[i] = [] {};
+                continue;
+            }
+
+            tasks[i] = [this, &body, elements, per_thread, threads_used, thread_idx = i] {
+                if (altblock) {
+                    size_t end = std::min(elements, ((thread_idx + 1) * per_thread));
+                    for (size_t i = (thread_idx * per_thread); i < end; ++i) {
+                        body(i);
+                    }
+                } else {
+                    for (size_t i = thread_idx; i < elements; i += threads_used) {
+                        body(i);
+                    }
+                }
+            };
+        }
+
+        (this->*run_func)();
+    }
 };

@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
     int threads = -1;
     int cv = false;
     bool altblock = false;
+    uint32_t mininstr = 0;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -41,10 +42,11 @@ int main(int argc, char** argv) {
         ("f,tree", "Print tree info", cxxopts::value<bool>()->default_value("false"))
         ("t,threads", "Number of threads to use in the AVX implementation (-1 means total - 1)", cxxopts::value<int>()->default_value("-1"))
         ("m,sync", "Synchronization mechanism (0 = barrier, 1 = custom spinlock)", cxxopts::value<int>()->default_value("0"))
-        ("b,altblock", "Use alternate loop blocking method", cxxopts::value<bool>()->default_value("false"));
+        ("b,altblock", "Use alternate loop blocking method", cxxopts::value<bool>()->default_value("false"))
+        ("i,mininstr", "Minimum number of 8-instruction AVX vectors (or 4x the minimum number of nodes) to process per thread", cxxopts::value<uint32_t>()->default_value("0"));
 
     options.parse_positional("infile");
-    options.custom_help("<infile> [-S] [-o <outfile>] [-d] [-s] [-f] [-t <threadnum>] [-m <syncmode>]");
+    options.custom_help("<infile> [-S] [-o <outfile>] [-d] [-s] [-f] [-t <threadnum>] [-m <syncmode>] [-b] -[i mininstr]");
     options.positional_help("");
 
     try {
@@ -70,6 +72,7 @@ int main(int argc, char** argv) {
         threads = res["threads"].as<int>();
         cv = res["sync"].as<int>();
         altblock = res["altblock"].as<bool>();
+        mininstr = res["mininstr"].as<uint32_t>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -117,7 +120,7 @@ int main(int argc, char** argv) {
         if (simple) {
             gen = std::make_unique<rv_generator_st>(depth_tree);
         } else {
-            gen = std::make_unique<rv_generator_avx>(depth_tree, threads, cv, altblock);
+            gen = std::make_unique<rv_generator_avx>(depth_tree, threads, cv, altblock, mininstr);
         }
 
         if (debug || tree) {

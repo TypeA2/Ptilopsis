@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugOptimized|Win32">
+      <Configuration>DebugOptimized</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugOptimized|x64">
+      <Configuration>DebugOptimized</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
       <Platform>Win32</Platform>
@@ -29,12 +37,22 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|Win32'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|x64'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
@@ -52,10 +70,16 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -74,7 +98,30 @@
     <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(SolutionDir)subprojects\cxxopts-3.0.0\include;$(SolutionDir)subprojects\range-v3-0.12.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <AdditionalOptions>/std:c++latest</AdditionalOptions>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|x64'">
+    <NMakeBuildCommandLine>meson compile -C build_vs\$(Configuration) ptilopsis</NMakeBuildCommandLine>
+    <NMakeOutput>Ptilopsis.exe</NMakeOutput>
+    <NMakeCleanCommandLine>meson compile -C build_vs\$(Configuration) --clean</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>meson compile -C build_vs\$(Configuration) --clean &amp;&amp;  meson compile -C build_vs\$(Configuration) ptilopsis</NMakeReBuildCommandLine>
+    <NMakePreprocessorDefinitions>_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
+    <IntDir>build_vs\$(Configuration)\</IntDir>
+    <ExecutablePath>$(DevEnvDir)CommonExtensions\Microsoft\CMake\Ninja\;$(ExecutablePath)</ExecutablePath>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(SolutionDir)subprojects\cxxopts-3.0.0\include;$(SolutionDir)subprojects\range-v3-0.12.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <AdditionalOptions>/std:c++latest</AdditionalOptions>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <NMakeBuildCommandLine>meson compile -C build_vs\$(Configuration) ptilopsis</NMakeBuildCommandLine>
+    <NMakeOutput>Ptilopsis.exe</NMakeOutput>
+    <NMakeCleanCommandLine>meson compile -C build_vs\$(Configuration) --clean</NMakeCleanCommandLine>
+    <NMakeReBuildCommandLine>meson compile -C build_vs\$(Configuration) --clean &amp;&amp;  meson compile -C build_vs\$(Configuration) ptilopsis</NMakeReBuildCommandLine>
+    <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <OutDir>$(SolutionDir)build_vs\$(Configuration)\</OutDir>
+    <IntDir>build_vs\$(Configuration)\</IntDir>
+    <NMakeIncludeSearchPath>$(SolutionDir)include;$(SolutionDir)subprojects\pareas-ast\include;$(SolutionDir)subprojects\fmt-8.1.1\include;$(SolutionDir)subprojects\magic_enum\include;$(SolutionDir)subprojects\cxxopts-3.0.0\include;$(SolutionDir)subprojects\range-v3-0.12.0\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <AdditionalOptions>/std:c++latest</AdditionalOptions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|Win32'">
     <NMakeBuildCommandLine>meson compile -C build_vs\$(Configuration) ptilopsis</NMakeBuildCommandLine>
     <NMakeOutput>Ptilopsis.exe</NMakeOutput>
     <NMakeCleanCommandLine>meson compile -C build_vs\$(Configuration) --clean</NMakeCleanCommandLine>
