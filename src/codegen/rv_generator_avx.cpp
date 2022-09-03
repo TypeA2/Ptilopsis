@@ -6,6 +6,7 @@
 #include <cmath>
 #include <bit>
 #include <algorithm>
+#include <execution>
 
 #include <magic_enum.hpp>
 
@@ -506,10 +507,10 @@ void rv_generator_avx::isn_gen() {
 
     // TODO how realistic is SIMD'ing this? Sorting and removing takes ~8% of the original isn_gen time
     auto idx_array = avx_buffer<uint32_t>::iota(nodes);
-    std::ranges::sort(idx_array, std::ranges::less {}, [this](uint32_t i) {
-        return depth[i];
+    std::sort(std::execution::par_unseq, idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
+        return depth[lhs] < depth[rhs];
     });
-
+    
     TRACEPOINT("ST::ISN_GEN::SORT");
 
     auto depth_starts = avx_buffer<uint32_t>::iota(nodes);
