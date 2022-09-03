@@ -3,31 +3,31 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugOptimized|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommand>$(SolutionDir)build_vs\$(Configuration)\$(TargetFileName)</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\3.in -o NUL -t 4</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>.\testfiles\pareas\basic\7.in -o NUL</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

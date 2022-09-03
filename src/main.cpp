@@ -80,6 +80,13 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+#ifdef _MSC_VER
+    if (!SetProcessAffinityMask(GetCurrentProcess(), (1ui32 << threads) - 1)) {
+        std::cerr << "Failed to set processor affinity!\n";
+        return EXIT_FAILURE;
+    }
+#endif
+
     try {
         std::unique_ptr<std::istream> input;
         std::unique_ptr<Lexer> lexer;

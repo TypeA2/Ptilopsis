@@ -12,6 +12,10 @@ using steady_clock = std::chrono::steady_clock;
 #include "threading.hpp"
 #include "disassembler.hpp"
 
+#ifndef _MSC_VER
+#   include <tbb/task_arena.h>
+#endif
+
 #if defined(DEBUG) && !defined(NOTRACE)
 #   define TRACEPOINT(name) this->_trace(name)
 #else
@@ -69,6 +73,11 @@ class rv_generator_avx : public rv_generator_st {
     uint32_t threads;
     std::vector<std::thread> pool;
     std::vector<std::function<void()>> tasks;
+
+#ifndef _MSC_VER
+    tbb::task_arena limited_arena;
+#endif
+
 
     int sync_mode;
     bool altblock;

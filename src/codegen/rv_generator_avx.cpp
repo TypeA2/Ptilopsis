@@ -18,9 +18,19 @@ using namespace simd::epi32_operators;
 namespace epi32 = simd::epi32;
 namespace epi64 = simd::epi64;
 
+static std::atomic_size_t threads_created = 0;
+
+struct threadpool_test {
+    threadpool_test() { ++threads_created; }
+};
+thread_local threadpool_test threadpool_tester;
+
 rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock, uint32_t mininstr)
     : rv_generator_st { tree }
     , threads { std::min<uint32_t>({ static_cast<uint32_t>(nodes), static_cast<uint32_t>(concurrency), std::thread::hardware_concurrency() - 1 }) }
+#ifndef _MSC_VER
+    , limited_arena { this->threads }
+#endif
     , sync_mode { sync }
     , sync { threads + 1 }
     , altblock { altblock }
@@ -47,6 +57,35 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
     tasks.resize(this->threads);
     for (uint32_t i = 0; i < this->threads; ++i) {
         pool.emplace_back(std::bind(thread_func, this, i));
+    }
+
+    /* Populate Intel TBB threadpool */
+    {
+        auto comp = [](uint32_t l, uint32_t r) {
+            (void)threadpool_tester;
+            return l < r;
+        };
+
+#ifndef _MSC_VER
+        limited_arena.execute([&] {
+#endif
+            auto tmp = avx_buffer<uint32_t>::iota(nodes);
+            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end(), comp);
+            size_t initial = threads_created;
+            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end(), comp);
+
+            std::cerr << initial << " " << threads_created << "\n";
+            if (initial != threads_created) {
+                std::stringstream ss;
+                ss << "Threadpool is being weird (" << initial << " != " << threads_created << ")";
+                throw std::runtime_error { ss.str() };
+            } else {
+                std::cerr << "Created " << rvdisasm::color::imm << threads_created << rvdisasm::color::white << " pooled threads\n";
+            }
+
+#ifndef _MSC_VER
+        });
+#endif
     }
 }
 
@@ -507,21 +546,34 @@ void rv_generator_avx::isn_gen() {
 
     // TODO how realistic is SIMD'ing this? Sorting and removing takes ~8% of the original isn_gen time
     auto idx_array = avx_buffer<uint32_t>::iota(nodes);
-    std::sort(std::execution::par_unseq, idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
-        return depth[lhs] < depth[rhs];
+
+#ifndef _MSC_VER
+    limited_arena.execute([&] {
+#endif
+        std::sort(std::execution::par_unseq, idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
+            return depth[lhs] < depth[rhs];
+        });
+#ifndef _MSC_VER
     });
-    
-    TRACEPOINT("ST::ISN_GEN::SORT");
+#endif
+
+    TRACEPOINT("MT::ISN_GEN::SORT");
 
     auto depth_starts = avx_buffer<uint32_t>::iota(nodes);
 
-    auto removed = std::ranges::remove_if(depth_starts, [this, &idx_array](uint32_t i) {
-        return !(i == 0 || depth[idx_array[i]] != depth[idx_array[i - 1]]);
+#ifndef _MSC_VER
+    limited_arena.execute([&] {
+#endif
+        auto removed = std::remove_if(std::execution::par_unseq, depth_starts.begin(), depth_starts.end(), [this, &idx_array](uint32_t i) {
+            return !(i == 0 || depth[idx_array[i]] != depth[idx_array[i - 1]]);
+        });
+
+        depth_starts.shrink_to(std::distance(depth_starts.begin(), removed));
+#ifndef _MSC_VER
     });
+#endif
 
-    depth_starts.shrink_to(std::distance(depth_starts.begin(), removed.begin()));
-
-    TRACEPOINT("ST::ISN_GEN::FILTER");
+    TRACEPOINT("MT::ISN_GEN::FILTER");
 
     uint32_t word_count = node_locations.back();
 
