@@ -36,7 +36,11 @@ else
     endif
 endif
 
-threads_dep = dependency('threads')
+threads_dep = [ dependency('threads') ]
+
+if not is_msvc
+    threads_dep += dependency('tbb')
+endif
 
 # Use static lib version of pareas-ast as dependency
 libpareas_ast_dep = subproject('pareas-ast', default_options: ['warning_level=0']).get_variable('libpareas_ast_dep')
@@ -67,16 +71,16 @@ executable(
     include_directories: includes
 )
 
-executable(
-    'prefix_sum',
-    prefix_sum_sources,
-    dependencies: [ threads_dep, magic_enum_dep, cxxopts_dep ],
-    include_directories: includes
-)
+#executable(
+#    'prefix_sum',
+#    prefix_sum_sources,
+#    dependencies: [ threads_dep, magic_enum_dep, cxxopts_dep ],
+#    include_directories: includes
+#)
 
-executable(
-    'test_shifts',
-    [ 'benchmarks/test_shifts.cpp' ],
-    dependencies: [ magic_enum_dep ],
-    include_directories: includes
-)
+#executable(
+#    'test_shifts',
+#    [ 'benchmarks/test_shifts.cpp' ],
+#    dependencies: [ magic_enum_dep ],
+#    include_directories: includes
+#)
