@@ -957,14 +957,17 @@ void rv_generator_avx::optimize() {
     }
 
     used_instrs_avx = avx_buffer<uint32_t> { instr.size() };
-    for (uint32_t i = 0; i < instr.size_m256i(); ++i) {
-        const m256i rd = epi32::load(this->rd_avx.m256i(i));
-        const m256i used_mask = epi32::load(used_registers.m256i(i));
+    {
+        auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
+            const m256i rd = epi32::load(this->rd_avx.m256i(i));
+            const m256i used_mask = epi32::load(used_registers.m256i(i));
 
-        epi32::store(used_instrs_avx.m256i(i), ~(rd > 63) | used_mask);
+            epi32::store(used_instrs_avx.m256i(i), ~(rd > 63) | used_mask);
+        };
+
+        run_basic(body, instr.size_m256i(), mininstr);
     }
-
-    TRACEPOINT("ST::OPTIMIZE::STORE");
+    TRACEPOINT("MT::OPTIMIZE::STORE");
 }
 
 void rv_generator_avx::regalloc() {
@@ -1400,12 +1403,16 @@ void rv_generator_avx::regalloc() {
 
     /* Whether the virtual register was swapped */
     avx_buffer<uint32_t> spill_offsets { symbol_registers.size() };
-    for (uint32_t i = 0; i < spill_offsets.size_m256i(); ++i) {
-        m256i swapped_mask = epi32::load(symbol_swapped.m256i(i));
-        epi32::store(spill_offsets.m256i(i), 1_m256i & swapped_mask);
+    {
+        auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
+            m256i swapped_mask = epi32::load(symbol_swapped.m256i(i));
+            epi32::store(spill_offsets.m256i(i), 1_m256i & swapped_mask);
+        };
+
+        run_basic(body, spill_offsets.size_m256i(), mininstr);
     }
 
-    TRACEPOINT("ST::REGALLOC::SWAPPED");
+    TRACEPOINT("MT::REGALLOC::SWAPPED");
 
     // TODO avx segmented scan
     for (size_t i = 0; i < symbol_registers.size(); ++i) {

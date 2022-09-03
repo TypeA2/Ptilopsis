@@ -45,14 +45,15 @@ class AVX_ALIGNED avx_buffer {
 
         /* Round up to power of 2: https://stackoverflow.com/a/9194117/8662472 */
         size_t new_capacity = ((sizeof(T) * _count) + AVX_ALIGNMENT - 1) & -AVX_ALIGNMENT;
+        size_t total_size = new_capacity + (2 * AVX_ALIGNMENT);
 
         /* Over-allocate by 1x the AVX alignment at both the start and the end */
-        char* raw_ptr = static_cast<char*>(operator new[](new_capacity + (2 * AVX_ALIGNMENT), std::align_val_t { AVX_ALIGNMENT }));
+        char* raw_ptr = static_cast<char*>(operator new[](total_size, std::align_val_t { AVX_ALIGNMENT }));
 
         /* Zero-initialize everything so everything can be read */
-        std::fill_n(raw_ptr, new_capacity + (2 * AVX_ALIGNMENT), 0);
-
-        /* Keep a buffer the size of the AVX alignemtn before our start */
+        std::fill_n(raw_ptr, total_size, 0);
+        
+        /* Keep a buffer the size of the AVX alignemnt before our start */
         _ptr = reinterpret_cast<T*>(raw_ptr + AVX_ALIGNMENT);
     }
 
