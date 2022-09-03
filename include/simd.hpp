@@ -17,7 +17,7 @@
 using m256i = __m256i;
 #else
 #   define FORCE_INLINE inline __attribute__((__always_inline__))
-#   define FORCE_INLINE_LAMBDA FORCE_INLINE
+#   define FORCE_INLINE_LAMBDA __attribute__((__always_inline__))
 struct AVX_ALIGNED m256i {
     __m256i val;
 
