@@ -18,13 +18,6 @@ using namespace simd::epi32_operators;
 namespace epi32 = simd::epi32;
 namespace epi64 = simd::epi64;
 
-static std::atomic_size_t threads_created = 0;
-
-struct threadpool_test {
-    threadpool_test() { ++threads_created; }
-};
-thread_local threadpool_test threadpool_tester;
-
 rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock, uint32_t mininstr)
     : rv_generator_st { tree }
     , threads { std::min<uint32_t>({ static_cast<uint32_t>(nodes), static_cast<uint32_t>(concurrency), std::thread::hardware_concurrency() - 1 }) }
@@ -59,23 +52,14 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
         pool.emplace_back(std::bind(thread_func, this, i));
     }
 
-    /* Populate Intel TBB threadpool */
+    /* Populate threadpools */
     {
-        auto comp = [](uint32_t l, uint32_t r) {
-            (void)threadpool_tester;
-            return l < r;
-        };
-
 #ifndef _MSC_VER
         limited_arena.execute([&] {
 #endif
             auto tmp = avx_buffer<uint32_t>::iota(nodes);
-            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end(), comp);
-            size_t initial = threads_created;
-            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end(), comp);
-
-            std::cerr << "Created " << rvdisasm::color::imm << threads_created << rvdisasm::color::white << " pooled threads\n";
-
+            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end());
+            std::sort(std::execution::par_unseq, tmp.begin(), tmp.end());
 #ifndef _MSC_VER
         });
 #endif
