@@ -74,14 +74,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
             size_t initial = threads_created;
             std::sort(std::execution::par_unseq, tmp.begin(), tmp.end(), comp);
 
-            std::cerr << initial << " " << threads_created << "\n";
-            if (initial != threads_created) {
-                std::stringstream ss;
-                ss << "Threadpool is being weird (" << initial << " != " << threads_created << ")";
-                throw std::runtime_error { ss.str() };
-            } else {
-                std::cerr << "Created " << rvdisasm::color::imm << threads_created << rvdisasm::color::white << " pooled threads\n";
-            }
+            std::cerr << "Created " << rvdisasm::color::imm << threads_created << rvdisasm::color::white << " pooled threads\n";
 
 #ifndef _MSC_VER
         });
