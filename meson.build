@@ -21,11 +21,19 @@ if is_msvc
         ],
         language: ['c', 'cpp']
     )
+
+    if get_option('buildtype').startswith('debug')
+        add_project_arguments([ '/DDEBUG' ], language: ['c', 'cpp'])
+    endif
 else
     add_project_arguments(
         [ '-mavx2', '-std=c++20', '-Wno-implicit-fallthrough', '-Wno-missing-field-initializers', '-Wno-psabi' ],
         language: ['c', 'cpp']
     )
+
+    if get_option('buildtype').startswith('debug')
+        add_project_arguments([ '-DDEBUG' ], language: ['c', 'cpp'])
+    endif
 endif
 
 threads_dep = dependency('threads')

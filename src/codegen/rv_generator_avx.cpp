@@ -1,4 +1,4 @@
-#include "codegen/rv_generator_avx.hpp"
+﻿#include "codegen/rv_generator_avx.hpp"
 
 #include <iostream>
 #include <bitset>
@@ -10,7 +10,6 @@
 #include <magic_enum.hpp>
 
 #include "simd.hpp"
-#include "disassembler.hpp"
 #include "utils.hpp"
 
 using namespace simd::epi32_operators;
@@ -25,9 +24,6 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
     , sync { threads + 1 }
     , altblock { altblock }
     , mininstr { mininstr } {
-
-    /* Processing happens either node-parallel or function-parallel, functions have >0 nodes, so at most instr count */
-    std::cerr << "Using " << rvdisasm::color::imm << this->threads << rvdisasm::color::white << " threads\n\n";
 
     void(rv_generator_avx:: * thread_func)(size_t);
 
@@ -87,7 +83,27 @@ void rv_generator_avx::dump_instrs() {
     }
 }
 
+void rv_generator_avx::process() {
+    /* Processing happens either node-parallel or function-parallel, functions have >0 nodes, so at most instr count */
+    std::cerr << "Using " << rvdisasm::color::imm << this->threads << rvdisasm::color::white << " threads\n";
+
+#ifdef DEBUG
+    std::cerr << "Tracing is " << rvdisasm::color::imm << "ENABLED" << rvdisasm::color::white << "\n";
+#else
+    std::cerr << "Tracing is " << rvdisasm::color::imm << "DISABLED" << rvdisasm::color::white << "\n";
+#endif
+
+    std::cerr << "\n";
+
+    start = steady_clock::now();
+    prev = start;
+
+    rv_generator_st::process();
+}
+
 void rv_generator_avx::preprocess() {
+    TRACEPOINT("PREPROCESS");
+
     using enum rv_node_type;
     {
         auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
@@ -178,6 +194,8 @@ void rv_generator_avx::preprocess() {
         run_basic(body, node_types.size_m256i(), (mininstr / 4));
     }
 
+    TRACEPOINT("MT::PREPROCESS::FUNC_ARG");
+
     {
         /* For all func_call_arg_list, set the node data to the number of stack args
              *   If the last (immediately preceding) argument is a stack arg, this already contains the needed number.
@@ -229,9 +247,11 @@ void rv_generator_avx::preprocess() {
         run_basic(body, node_types.size_m256i(), (mininstr / 4));
     }
 
+    TRACEPOINT("MT::PREPROCESS::FUNC_CALL_ARG");
+
     {
         auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
-                m256i parents = epi32::load(this->parents.m256i(i));
+            m256i parents = epi32::load(this->parents.m256i(i));
 
             /* All nodes with parents. There is only ever 1 node per program without a parent, so this mask is always nonzero */
             m256i valid_parents_mask = (parents > -1);
@@ -265,14 +285,18 @@ void rv_generator_avx::preprocess() {
         };
         run_basic(body, node_types.size_m256i(), (mininstr / 4));
     }
+
+    TRACEPOINT("MT::PREPROCESS::PARENT");
 }
 
 void rv_generator_avx::isn_cnt() {
     using enum rv_node_type;
 
+    TRACEPOINT("ISN_CNT");
+
     {
         auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
-                m256i node_types = epi32::load(this->node_types.m256i(i));
+            m256i node_types = epi32::load(this->node_types.m256i(i));
             /* node_types is the in the outer array, so multiply by _mm256_set1_epi32 to get the actual index */
             // TODO maybe pad data_type_array_size to 8 elements and use a shift instead, also maybe pre-scale to 4
             m256i node_types_indices = node_types * data_type_count;
@@ -326,6 +350,9 @@ void rv_generator_avx::isn_cnt() {
         run_basic(body, node_types.size_m256i(), (mininstr / 4));
     }
 
+
+    TRACEPOINT("MT::ISN_CNT::COUNT");
+
     /* Prefix sum from ADMS20_05 */
     
     /* Accumulator */
@@ -345,6 +372,8 @@ void rv_generator_avx::isn_cnt() {
 
         epi32::store(this->node_locations.m256i(i), node_size);
     }
+
+    TRACEPOINT("ST::ISN_CNT::ACC");
 
     /* instr_count_fix not needed, we shouldn't be seeing invalid nodes */
 
@@ -398,6 +427,8 @@ void rv_generator_avx::isn_cnt() {
 
         run_basic(body, node_types.size_m256i(), (mininstr / 4));
     }
+
+    TRACEPOINT("MT::ISN_CNT::FIX");
 
     /* Function table generation */
     // TODO benchmark 1 vs 2 pass method (aka with vs without reallocations)
@@ -464,16 +495,22 @@ void rv_generator_avx::isn_cnt() {
 
         epi32::store(func_ends.m256i(i), start + size);
     }
+
+    TRACEPOINT("ST::ISN_CNT::FUNCTABLE");
 }
 
 void rv_generator_avx::isn_gen() {
     using enum rv_node_type;
+
+    TRACEPOINT("ISN_GEN");
 
     // TODO how realistic is SIMD'ing this? Sorting and removing takes ~8% of the original isn_gen time
     auto idx_array = avx_buffer<uint32_t>::iota(nodes);
     std::ranges::sort(idx_array, std::ranges::less {}, [this](uint32_t i) {
         return depth[i];
     });
+
+    TRACEPOINT("ST::ISN_GEN::SORT");
 
     auto depth_starts = avx_buffer<uint32_t>::iota(nodes);
 
@@ -482,6 +519,8 @@ void rv_generator_avx::isn_gen() {
     });
 
     depth_starts.shrink_to(std::distance(depth_starts.begin(), removed.begin()));
+
+    TRACEPOINT("ST::ISN_GEN::FILTER");
 
     uint32_t word_count = node_locations.back();
 
@@ -492,6 +531,8 @@ void rv_generator_avx::isn_gen() {
     rs1_avx = avx_buffer<uint32_t> { word_count };
     rs2_avx = avx_buffer<uint32_t> { word_count };
     jt_avx = avx_buffer<uint32_t> { word_count };
+
+    TRACEPOINT("ST::ISN_GEN::ALLOC");
 
     /* Really rough heuristic for the minimum instr per level per thread */
     size_t mininstr_per_level = mininstr / max_depth;
@@ -798,9 +839,13 @@ void rv_generator_avx::isn_gen() {
             run_basic(body, level_steps, mininstr_per_level);
         }
     }
+
+    TRACEPOINT("MT::ISN_GEN::GEN");
 }
 
 void rv_generator_avx::optimize() {
+    TRACEPOINT("OPTIMIZE");
+
     avx_buffer<uint32_t> used_registers { instr.size() };
     {
         auto body = [&](size_t i) FORCE_INLINE_LAMBDA {
@@ -824,6 +869,8 @@ void rv_generator_avx::optimize() {
 
         run_basic(body, instr.size_m256i(), mininstr);
     }
+
+    TRACEPOINT("MT::OPTIMIZE::USED_REGS");
 
     bool cont = true;
     while (cont) {
@@ -864,6 +911,8 @@ void rv_generator_avx::optimize() {
             };
 
             run_basic(body, instr.size_m256i(), mininstr);
+
+            TRACEPOINT("MT::OPTIMIZE::USED1");
         }
 
         {
@@ -894,6 +943,8 @@ void rv_generator_avx::optimize() {
             };
 
             run_basic(body, instr.size_m256i(), mininstr);
+
+            TRACEPOINT("MT::OPTIMIZE::USED2");
         }
 
 
@@ -912,9 +963,13 @@ void rv_generator_avx::optimize() {
 
         epi32::store(used_instrs_avx.m256i(i), ~(rd > 63) | used_mask);
     }
+
+    TRACEPOINT("ST::OPTIMIZE::STORE");
 }
 
 void rv_generator_avx::regalloc() {
+    TRACEPOINT("REGALLOC");
+
     /* Process 1 instruction per function at a time, to at least have some parallelism */
     uint32_t max_func_size = std::ranges::max(function_sizes);
     uint32_t func_count = static_cast<uint32_t>(function_sizes.size());
@@ -933,6 +988,8 @@ void rv_generator_avx::regalloc() {
     avx_buffer<uint32_t> symbol_registers { used_instrs_avx.size() };
     avx_buffer<uint32_t> symbol_swapped { used_instrs_avx.size() };
     
+    TRACEPOINT("ST::REGALLOC::SETUP");
+
     {
         size_t elements = function_sizes.size_m256i();
         size_t per_thread = std::max(mininstr / function_sizes.size(), (elements + threads - 1) / threads);
@@ -1311,11 +1368,15 @@ void rv_generator_avx::regalloc() {
         (this->*run_func)();
     }
 
+    TRACEPOINT("MT::REGALLOC::REGALLOC");
+
     avx_buffer<uint32_t> reverse_func_id_map { instr.size() };
     /* Scatter, so scalar... */
     for (uint32_t start : func_starts) {
         reverse_func_id_map[start] = 1;
     }
+
+    TRACEPOINT("ST::REGALLOC::FUNCID");
 
     avx_buffer<uint32_t> func_start_bools = reverse_func_id_map;
 
@@ -1335,12 +1396,16 @@ void rv_generator_avx::regalloc() {
         epi32::store(reverse_func_id_map.m256i(i), vals);
     }
 
+    TRACEPOINT("ST::REGALLOC::SUM_FUNCID");
+
     /* Whether the virtual register was swapped */
     avx_buffer<uint32_t> spill_offsets { symbol_registers.size() };
     for (uint32_t i = 0; i < spill_offsets.size_m256i(); ++i) {
         m256i swapped_mask = epi32::load(symbol_swapped.m256i(i));
         epi32::store(spill_offsets.m256i(i), 1_m256i & swapped_mask);
     }
+
+    TRACEPOINT("ST::REGALLOC::SWAPPED");
 
     // TODO avx segmented scan
     for (size_t i = 0; i < symbol_registers.size(); ++i) {
@@ -1349,6 +1414,8 @@ void rv_generator_avx::regalloc() {
             spill_offsets[i] = i > 0 ? spill_offsets[i - 1] : 0;
         }
     }
+
+    TRACEPOINT("ST::REGALLOC::SEGSCAN");
 
     avx_buffer<uint32_t> instr_counts { instr.size() };
     {
@@ -1374,6 +1441,8 @@ void rv_generator_avx::regalloc() {
         run_basic(body, instr_counts.size_m256i(), mininstr);
     }
 
+    TRACEPOINT("MT::REGALLOC::INSTR_COUNTS");
+
     /* Only preserve caller-saved registers */
     const m256i nonscratch = epi64::from_value(nonscratch_registers);
     {
@@ -1396,6 +1465,8 @@ void rv_generator_avx::regalloc() {
         run_basic(body, preserve_masks.size_m256i(), mininstr / func_count);
     }
 
+    TRACEPOINT("MT::REGALLOC::PRESERVE_COUNT");
+
     /* Exclusive scan on the newly calculated offsets */
     offset = epi32::zero();
     avx_buffer<uint32_t> instr_offsets { instr.size() };
@@ -1412,6 +1483,8 @@ void rv_generator_avx::regalloc() {
 
         epi32::store(instr_offsets.m256i(i), vals);
     }
+
+    TRACEPOINT("ST::REGALLOC::NEW_OFFSETS");
 
     uint32_t new_instr_count = (instr_offsets.size() == 0) ? 0 : (instr_offsets.back() + 1);
 
@@ -1570,6 +1643,8 @@ void rv_generator_avx::regalloc() {
         run_basic(body, instr.size_m256i(), mininstr);
     }
 
+    TRACEPOINT("MT::REGALLOC::PRESERVE");
+
     auto overflows = avx_buffer<uint32_t>::zero(func_count);
     
     instr = new_instr;
@@ -1577,6 +1652,8 @@ void rv_generator_avx::regalloc() {
     rs1_avx = new_rs1;
     rs2_avx = new_rs2;
     jt_avx = new_jt;
+
+    TRACEPOINT("ST::REGALLOC::ALLOC_NEW");
 
     fix_func_tab_avx(instr_offsets);
 
@@ -1679,9 +1756,13 @@ void rv_generator_avx::regalloc() {
 
         run_basic(body, func_starts.size_m256i(), mininstr / func_count);
     }
+
+    TRACEPOINT("MT::REGALLOC::APPLY_PRESERVE");
 }
 
 void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {
+    TRACEPOINT("FIX_FUNC_TAB");
+
     /* Re-calculate function table based on new offsets */
     auto body = [&](size_t i) {
         const m256i func_start_indices = epi32::load(func_starts.m256i(i));
@@ -1698,6 +1779,8 @@ void rv_generator_avx::fix_func_tab_avx(std::span<uint32_t> instr_offsets) {
     };
 
     run_basic(body, func_starts.size_m256i(), mininstr / func_starts.size());
+
+    TRACEPOINT("MT::FIX_FUNC_TAB::DONE");
 }
 
 void rv_generator_avx::scatter_regalloc_fixup(const std::span<int, 8> valid_mask, const m256i indices, const std::span<int, 8> opwords) {
@@ -1715,6 +1798,8 @@ void rv_generator_avx::scatter_regalloc_fixup(const std::span<int, 8> valid_mask
 }
 
 void rv_generator_avx::fix_jumps() {
+    TRACEPOINT("FIX_JUMPS");
+
     avx_buffer<uint32_t> instr_sizes { instr.size() };
     {
         auto body = [&](size_t i) {
@@ -1727,6 +1812,8 @@ void rv_generator_avx::fix_jumps() {
 
         run_basic(body, instr.size_m256i(), mininstr);
     }
+
+    TRACEPOINT("MT::FIX_JUMPS::INSTR_SIZE");
 
     /* Exclusive scan */
     // TODO make this generic again
@@ -1746,6 +1833,8 @@ void rv_generator_avx::fix_jumps() {
         epi32::store(instr_offsets.m256i(i), vals);
     }
 
+    TRACEPOINT("ST::FIX_JUMPS::NEW_OFFSETS");
+
     uint32_t instr_count = instr_sizes.back() + instr_offsets.back();
 
     avx_buffer<uint32_t> new_instr { instr_count };
@@ -1763,10 +1852,14 @@ void rv_generator_avx::fix_jumps() {
         new_jt[idx] = jt_avx[i];
     }
 
+    TRACEPOINT("ST::FIX_JUMPS::GATHER_NEW_OFFSETS");
+
     for (uint32_t i = 0; i < new_instr.size_m256i(); ++i) {
         const m256i indices = epi32::load(new_jt.m256i(i));
         epi32::store(new_jt.m256i(i), epi32::gather(instr_offsets.data(), indices));
     }
+
+    TRACEPOINT("ST::FIX_JUMPS::NEW_INDICES");
 
     {
         auto body = [&](size_t i) {
@@ -1833,16 +1926,22 @@ void rv_generator_avx::fix_jumps() {
         run_basic(body, instr.size_m256i(), mininstr);
     }
 
+    TRACEPOINT("MT::FIX_JUMPS::GEN_JUMPS");
+
     instr = new_instr;
     jt_avx = new_jt;
     rd_avx = new_rd;
     rs1_avx = new_rs1;
     rs2_avx = new_rs2;
 
+    TRACEPOINT("ST::FIX_JUMPS::APPLY");
+
     fix_func_tab_avx(instr_offsets);
 }
 
 void rv_generator_avx::postprocess() {
+    TRACEPOINT("POSTPROCESS");
+
     auto body = [&](size_t i) {
         m256i instr = epi32::load(this->instr.m256i(i));
 
@@ -1854,6 +1953,8 @@ void rv_generator_avx::postprocess() {
     };
 
     run_basic(body, instr.size_m256i(), mininstr);
+
+    TRACEPOINT("MT::POSTPROCESS::DONE");
 }
 
 void rv_generator_avx::thread_func_barrier(size_t idx) {

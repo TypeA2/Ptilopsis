@@ -4,12 +4,52 @@
 #include <thread>
 #include <barrier>
 #include <functional>
+#include <chrono>
+using steady_clock = std::chrono::steady_clock;
 
 #include "codegen/rv_generator.hpp"
+#include "utils.hpp"
 #include "threading.hpp"
+#include "disassembler.hpp"
+
+#if defined(DEBUG) && !defined(NOTRACE)
+#   define TRACEPOINT(name) this->_trace(name)
+#else
+#   define TRACEPOINT(name)
+#endif
 
 /* SIMD-based generator */
 class rv_generator_avx : public rv_generator_st {
+    decltype(steady_clock::now()) start {};
+    decltype(steady_clock::now()) prev {};
+
+    void _trace(std::string_view name) {
+        auto now = steady_clock::now();
+        std::chrono::nanoseconds total = now - start;
+        std::chrono::nanoseconds elapsed = now - prev;
+
+        std::cerr << name;
+        
+        for (size_t i = 0; i < (36 - name.size()); ++i) {
+            std::cerr << " ";
+        }
+
+        std::stringstream ss;
+        ss << elapsed;
+
+        std::string elapsed_str = ss.str();
+
+
+
+        std::cerr << rvdisasm::color::imm << elapsed << rvdisasm::color::white;
+
+        for (size_t i = 0; i < (12 - elapsed_str.size()); ++i) {
+            std::cerr << " ";
+        }
+        std::cerr << " total = " << rvdisasm::color::imm << total << rvdisasm::color::white << "\n";
+        prev = steady_clock::now();
+    }
+
     public:
     rv_generator_avx(const DepthTree& tree, int concurrency, int sync, bool altblock, uint32_t mininstr);
 
@@ -45,6 +85,8 @@ class rv_generator_avx : public rv_generator_st {
     void (rv_generator_avx::* run_func)();
 
     void dump_instrs() override;
+
+    void process() override;
 
     void preprocess() override;
     void isn_cnt() override;
