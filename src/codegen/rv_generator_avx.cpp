@@ -53,7 +53,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
     }
 
     /* Populate threadpools */
-    {
+    if (this->threads > 1) {
 #ifndef _MSC_VER
         limited_arena.execute([&] {
 #endif
@@ -524,31 +524,45 @@ void rv_generator_avx::isn_gen() {
     // TODO how realistic is SIMD'ing this? Sorting and removing takes ~8% of the original isn_gen time
     auto idx_array = avx_buffer<uint32_t>::iota(nodes);
 
+    if (threads > 1) {
 #ifndef _MSC_VER
-    limited_arena.execute([&] {
+        limited_arena.execute([&] {
 #endif
-        std::sort(std::execution::par_unseq, idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
+            std::sort(std::execution::par_unseq, idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
+                return depth[lhs] < depth[rhs];
+            });
+#ifndef _MSC_VER
+        });
+#endif
+    } else {
+        std::sort(idx_array.begin(), idx_array.end(), [this](uint32_t lhs, uint32_t rhs) {
             return depth[lhs] < depth[rhs];
         });
-#ifndef _MSC_VER
-    });
-#endif
+    }
 
     TRACEPOINT("MT::ISN_GEN::SORT");
 
     auto depth_starts = avx_buffer<uint32_t>::iota(nodes);
 
+    if (threads > 1) {
 #ifndef _MSC_VER
-    limited_arena.execute([&] {
+        limited_arena.execute([&] {
 #endif
-        auto removed = std::remove_if(std::execution::par_unseq, depth_starts.begin(), depth_starts.end(), [this, &idx_array](uint32_t i) {
+            auto removed = std::remove_if(std::execution::par_unseq, depth_starts.begin(), depth_starts.end(), [this, &idx_array](uint32_t i) {
+                return !(i == 0 || depth[idx_array[i]] != depth[idx_array[i - 1]]);
+            });
+
+            depth_starts.shrink_to(std::distance(depth_starts.begin(), removed));
+#ifndef _MSC_VER
+        });
+#endif
+    } else {
+        auto removed = std::remove_if(depth_starts.begin(), depth_starts.end(), [this, &idx_array](uint32_t i) {
             return !(i == 0 || depth[idx_array[i]] != depth[idx_array[i - 1]]);
         });
 
         depth_starts.shrink_to(std::distance(depth_starts.begin(), removed));
-#ifndef _MSC_VER
-    });
-#endif
+    }
 
     TRACEPOINT("MT::ISN_GEN::FILTER");
 
