@@ -4,8 +4,7 @@ project(
     version: '1.0.0',
     default_options: [
         'warning_level=2',
-        'buildtype=release',
-		'fmt:warning_level=0'
+        'buildtype=release'
     ]
 )
 
