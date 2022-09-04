@@ -22,7 +22,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
     : rv_generator_st { tree }
     , threads { std::min<uint32_t>({ static_cast<uint32_t>(nodes), static_cast<uint32_t>(concurrency), std::thread::hardware_concurrency() - 1 }) }
 #ifndef _MSC_VER
-    , limited_arena { this->threads }
+    , limited_arena(this->threads)
 #endif
     , sync_mode { sync }
     , sync { threads + 1 }
