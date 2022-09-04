@@ -1053,7 +1053,7 @@ void rv_generator_avx::regalloc() {
                 /* For every instruction in every function... */
                 auto body = [&](uint32_t i, size_t j, std::span<uint32_t> original_register_state) FORCE_INLINE_LAMBDA {
                     const m256i local_indices = epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
-                    const m256i func_indices = (8_m256i * static_cast<int>(j)) + local_indices;
+                    // const m256i func_indices = (8_m256i * static_cast<int>(j)) + local_indices;
                     const m256i func_starts = epi32::load(this->func_starts.m256i(j));
                     const m256i func_sizes = epi32::load(this->function_sizes.m256i(j));
 
