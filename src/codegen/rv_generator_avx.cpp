@@ -1049,11 +1049,11 @@ void rv_generator_avx::regalloc() {
             }
 
             tasks[t] = [this, &lifetime_masks, &preserve_masks, &symbol_registers, &symbol_swapped, max_func_size, elements, per_thread, threads_used, start = t] {
-                auto register_state = avx_buffer<uint32_t>::fill(8 * 64, -1);
+                auto register_state = avx_buffer<uint32_t>::fill(per_thread * 8 * 64, -1);
                 /* For every instruction in every function... */
-                auto body = [&](uint32_t i, size_t j, std::span<uint32_t> original_register_state) FORCE_INLINE_LAMBDA {
+                auto body = [&](uint32_t i, size_t j, size_t thread_j, std::span<uint32_t> original_register_state) FORCE_INLINE_LAMBDA {
                     const m256i local_indices = epi32::from_values(0, 1, 2, 3, 4, 5, 6, 7);
-                    // const m256i func_indices = (8_m256i * static_cast<int>(j)) + local_indices;
+                    const m256i func_indices = (8_m256i * static_cast<int>(thread_j)) + local_indices;
                     const m256i func_starts = epi32::load(this->func_starts.m256i(j));
                     const m256i func_sizes = epi32::load(this->function_sizes.m256i(j));
 
@@ -1110,7 +1110,7 @@ void rv_generator_avx::regalloc() {
                                 (new_lifetime_mask_lo & extract_reg_mask) > 0, (new_lifetime_mask_hi & extract_reg_mask) > 0);
 
                             /* Indices into flattened array */
-                            const m256i register_state_indices = (local_indices * 64) + k;
+                            const m256i register_state_indices = (func_indices * 64) + k;
 
                             /* If the current physical register is spilled,
                                 * obtain the current virtual register residing in it from original_register_state
@@ -1398,14 +1398,15 @@ void rv_generator_avx::regalloc() {
 
                 for (uint32_t i = 0; i < max_func_size; ++i) {
                     avx_buffer<uint32_t> original_register_state = register_state;
+                    size_t thread_j = 0;
                     if (altblock) {
                         size_t end = std::min(elements, ((start + 1) * per_thread));
-                        for (size_t j = (start * per_thread); j <end; ++j) {
-                            body(i, j, original_register_state);
+                        for (size_t j = (start * per_thread); j < end; ++j) {
+                            body(i, j, thread_j++, original_register_state);
                         }
                     } else {
                         for (size_t j = start; j < elements; j += threads_used) {
-                            body(i, j, original_register_state);
+                            body(i, j, thread_j++, original_register_state);
                         }
                     }
                 }
