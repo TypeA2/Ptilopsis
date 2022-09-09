@@ -66,7 +66,7 @@ args, unknown = parser.parse_known_args()
 ptilopsis: Path = args.executable
 testdir: Path = args.testdir
 schema: list[Path] = make_schema(testdir)
-runs = 30
+runs = 15
 
 print(f"{runs} run(s)", file=sys.stderr)
 
