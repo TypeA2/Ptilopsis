@@ -102,27 +102,5 @@ for file in schema:
         header: list[str] = rows[0].split(",")
         counts: list[int] = list(map(int, rows[1].split(",")))
 
-        results[file].append(dict(zip(header, counts)))
-
-    totals: dict[str, int | float] = {
-        "preprocess": 0,
-        "isn_cnt": 0,
-        "isn_gen": 0,
-        "optimize": 0,
-        "regalloc": 0,
-        "fix_jumps": 0,
-        "postprocess": 0
-    }
-
-    for r in results[file]:
-        for k, v in r.items():
-            totals[k] += v
-
-    for k in totals.keys():
-        totals[k] /= runs
-
-    print(file.relative_to(testdir), end="")
-    for v in totals.values():
-        print(f",{round(v)}", end="")
-    print()
-    sys.stdout.flush()
+        print(f"{file.relative_to(testdir)},{counts}")
+        sys.stdout.flush()
