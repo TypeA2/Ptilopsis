@@ -64,7 +64,7 @@ class rv_generator {
     
     virtual ~rv_generator() = default;
 
-    virtual void process() = 0;
+    virtual void process(bool profile) = 0;
 
     [[nodiscard]] virtual std::span<uint32_t> get_instructions() const = 0;
 
@@ -83,7 +83,7 @@ class rv_generator_st : public rv_generator {
     public:
     using rv_generator::rv_generator;
 
-    void process() override;
+    void process(bool profile) override;
 
     [[nodiscard]] std::span<uint32_t> get_instructions() const override;
 

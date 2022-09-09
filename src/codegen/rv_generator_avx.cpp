@@ -100,7 +100,7 @@ void rv_generator_avx::dump_instrs() {
     }
 }
 
-void rv_generator_avx::process() {
+void rv_generator_avx::process(bool profile) {
     /* Processing happens either node-parallel or function-parallel, functions have >0 nodes, so at most instr count */
     std::cerr << "Using " << rvdisasm::color::imm << this->threads << rvdisasm::color::white << " threads\n";
 
@@ -115,7 +115,7 @@ void rv_generator_avx::process() {
     start = steady_clock::now();
     prev = start;
 
-    rv_generator_st::process();
+    rv_generator_st::process(profile);
 }
 
 void rv_generator_avx::preprocess() {

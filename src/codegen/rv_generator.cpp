@@ -126,7 +126,7 @@ std::ostream& rv_generator::to_asm(std::ostream& os) const {
     return os;
 }
 
-void rv_generator_st::process() {
+void rv_generator_st::process(bool profile) {
     std::vector<std::pair<std::string_view, std::chrono::nanoseconds>> durations;
     using pair_type = decltype(durations)::value_type;
     durations.reserve(7);
@@ -146,6 +146,20 @@ void rv_generator_st::process() {
     time("regalloc", &rv_generator_st::regalloc);
     time("fix_jumps", &rv_generator_st::fix_jumps);
     time("postprocess", &rv_generator_st::postprocess);
+
+    if (profile) {
+        size_t count_min1 = durations.size();
+
+        for (size_t i = 0; i < count_min1; ++i) {
+            std::cout << durations[i].first << ',';
+        }
+        std::cout << durations.back().first << '\n';
+
+        for (size_t i = 0; i < count_min1; ++i) {
+            std::cout << durations[i].second.count() << ',';
+        }
+        std::cout << durations.back().second.count() << '\n';
+    }
 
     std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});
     

@@ -95,7 +95,7 @@ class rv_generator_avx : public rv_generator_st {
 
     void dump_instrs() override;
 
-    void process() override;
+    void process(bool profile) override;
 
     void preprocess() override;
     void isn_cnt() override;

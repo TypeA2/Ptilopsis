@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
     int cv = false;
     bool altblock = false;
     uint32_t mininstr = 0;
+    bool profile = false;
 
     cxxopts::Options options("ptilopsis", "Rhine birb");
     options.add_options()
@@ -43,10 +44,11 @@ int main(int argc, char** argv) {
         ("t,threads", "Number of threads to use in the AVX implementation (-1 means total - 1)", cxxopts::value<int>()->default_value("-1"))
         ("m,sync", "Synchronization mechanism (0 = barrier, 1 = custom spinlock)", cxxopts::value<int>()->default_value("0"))
         ("b,altblock", "Use alternate loop blocking method", cxxopts::value<bool>()->default_value("false"))
-        ("i,mininstr", "Minimum number of 8-instruction AVX vectors (or 4x the minimum number of nodes) to process per thread", cxxopts::value<uint32_t>()->default_value("0"));
+        ("i,mininstr", "Minimum number of 8-instruction AVX vectors (or 4x the minimum number of nodes) to process per thread", cxxopts::value<uint32_t>()->default_value("0"))
+        ("p,profile", "Output in an automation-friendly profiling format to stdout", cxxopts::value<bool>()->default_value("false"));
 
     options.parse_positional("infile");
-    options.custom_help("<infile> [-S] [-o <outfile>] [-d] [-s] [-f] [-t <threadnum>] [-m <syncmode>] [-b] -[i mininstr]");
+    options.custom_help("<infile> [-S] [-o <outfile>] [-dsfbp][-t <threadnum>] [-m <syncmode>] [-b] -[i mininstr]");
     options.positional_help("");
 
     try {
@@ -73,6 +75,7 @@ int main(int argc, char** argv) {
         cv = res["sync"].as<int>();
         altblock = res["altblock"].as<bool>();
         mininstr = res["mininstr"].as<uint32_t>();
+        profile = res["profile"].as<bool>();
         
     } catch (const cxxopts::OptionException& e) {
         std::cerr << e.what() << '\n';
@@ -127,7 +130,7 @@ int main(int argc, char** argv) {
             node->print(std::cout);
         }
 
-        gen->process();
+        gen->process(profile);
 
         if (debug || tree) {
             gen->print(std::cout, debug);
