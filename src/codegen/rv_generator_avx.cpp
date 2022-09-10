@@ -26,6 +26,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
 #endif
     , sync_mode { sync }
     , sync { threads + 1 }
+    , sync2 { threads + 1 }
     , altblock { altblock }
     , mininstr { mininstr } {
 
@@ -69,7 +70,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
 rv_generator_avx::~rv_generator_avx() {
     done = true;
     for (uint32_t i = 0; i < threads; ++i) {
-        tasks[i] = [] { std::this_thread::sleep_for(std::chrono::milliseconds { 100 }); };
+        tasks[i] = [] { };
     }
     (this->*run_func)();
 
@@ -2013,7 +2014,7 @@ void rv_generator_avx::thread_func_barrier(size_t idx) {
     while (!done) {
         sync.arrive_and_wait();
         tasks[idx]();
-        sync.arrive_and_wait();
+        sync2.arrive_and_wait();
     }
 }
 
@@ -2022,7 +2023,7 @@ void rv_generator_avx::run_barrier() {
     sync.arrive_and_wait();
 
     /* Wait for all tasks to finish */
-    sync.arrive_and_wait();
+    sync2.arrive_and_wait();
 }
 
 void rv_generator_avx::thread_func_cv(size_t idx) {

@@ -81,6 +81,7 @@ class rv_generator_avx : public rv_generator_st {
 
     int sync_mode;
     std::barrier<> sync;
+    std::barrier<> sync2
 
     bool altblock;
     uint32_t mininstr;
