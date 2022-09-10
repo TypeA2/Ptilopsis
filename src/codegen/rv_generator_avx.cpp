@@ -69,9 +69,6 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
 
 rv_generator_avx::~rv_generator_avx() {
     done = true;
-    for (uint32_t i = 0; i < threads; ++i) {
-        tasks[i] = [] { };
-    }
     (this->*run_func)();
 
     for (auto& t : pool) {
@@ -2013,6 +2010,10 @@ void rv_generator_avx::postprocess() {
 void rv_generator_avx::thread_func_barrier(size_t idx) {
     while (!done) {
         sync.arrive_and_wait();
+        if (done) {
+            return;
+        }
+
         tasks[idx]();
         sync2.arrive_and_wait();
     }
