@@ -2023,6 +2023,11 @@ void rv_generator_avx::run_barrier() {
     /* Start task execution */
     sync.arrive_and_wait();
 
+    /* End if in destructor */
+    if (done) {
+        return;
+    }
+
     /* Wait for all tasks to finish */
     sync2.arrive_and_wait();
 }
@@ -2031,6 +2036,9 @@ void rv_generator_avx::thread_func_cv(size_t idx) {
     while (!done) {
         start_sync += 1;
         start_sync.wait_for(threads + 1);
+        if (done) {
+            return;
+        }
 
         tasks[idx]();
 
@@ -2045,6 +2053,10 @@ void rv_generator_avx::thread_func_cv(size_t idx) {
 void rv_generator_avx::run_cv() {
     start_sync += 1;
     start_sync.wait_for(threads + 1);
+
+    if (done) {
+        return;
+    }
 
     final_sync = 0;
 
