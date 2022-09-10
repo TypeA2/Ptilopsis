@@ -158,7 +158,7 @@ void rv_generator_st::process(bool profile) {
         for (size_t i = 0; i < count_min1; ++i) {
             std::cout << durations[i].second.count() << ',';
         }
-        std::cout << durations.back().second.count() << '\n';
+        std::cout << durations.back().second.count() << std::endl;
     }
 
     std::chrono::nanoseconds total = ranges::accumulate(durations | std::views::transform(&pair_type::second), std::chrono::nanoseconds {0});

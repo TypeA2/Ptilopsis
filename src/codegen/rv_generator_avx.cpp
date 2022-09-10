@@ -69,7 +69,7 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
 rv_generator_avx::~rv_generator_avx() {
     done = true;
     for (uint32_t i = 0; i < threads; ++i) {
-        tasks[i] = [] {};
+        tasks[i] = [] { std::this_thread::sleep_for(std::chrono::milliseconds { 100 }); };
     }
     (this->*run_func)();
 
