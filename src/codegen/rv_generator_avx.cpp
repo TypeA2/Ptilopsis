@@ -2020,13 +2020,14 @@ void rv_generator_avx::thread_func_barrier(size_t idx) {
 }
 
 void rv_generator_avx::run_barrier() {
-    /* Start task execution */
-    sync.arrive_and_wait();
-
     /* End if in destructor */
     if (done) {
+        sync.arrive_and_drop();
         return;
     }
+
+    /* Start task execution */
+    sync.arrive_and_wait();
 
     /* Wait for all tasks to finish */
     sync2.arrive_and_wait();
