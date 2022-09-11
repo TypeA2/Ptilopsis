@@ -72,7 +72,7 @@ rv_generator_avx::~rv_generator_avx() {
     (this->*run_func)();
 
     for (auto& t : pool) {
-        t.join();
+        t.detach();
     }
 }
 
