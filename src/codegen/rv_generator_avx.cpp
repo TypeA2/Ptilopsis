@@ -69,6 +69,9 @@ rv_generator_avx::rv_generator_avx(const DepthTree& tree, int concurrency, int s
 
 rv_generator_avx::~rv_generator_avx() {
     done = true;
+    for (size_t i = 0; i < threads; ++i) {
+        tasks[i] = [] { throw std::runtime_error { "Thread should've exited" }; };
+    }
     (this->*run_func)();
 
     for (auto& t : pool) {
@@ -2053,11 +2056,12 @@ void rv_generator_avx::thread_func_cv(size_t idx) {
 
 void rv_generator_avx::run_cv() {
     start_sync += 1;
-    start_sync.wait_for(threads + 1);
 
     if (done) {
         return;
     }
+
+    start_sync.wait_for(threads + 1);
 
     final_sync = 0;
 
