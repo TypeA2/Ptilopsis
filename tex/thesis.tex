@@ -543,6 +543,7 @@ The resulting executable will be placed in the specified \mono{builddir} and wil
     \item \mono{-b} When passed, use an alternate ordering of each thread's work to potentially improve caching effects.
     By default, when using a total of $x$ threads, operating on $y$ data elements, given a thread's index $i$, each thread processes the elements at index $e = i + n \cdot x$ for $n \geq 0$ while $e < y$
     With \mono{-b}, each thread instead processes $n = \lceil y / x \rceil$ adjacent elements, starting at index $i \cdot n$. Due to spatial locality of the data, this can improve performance.
+    \helpme{TODO is this worth using? we have a lot of data}
     \item \mono{-i <mininstr>} The minimum number of 256-bit vectors of finalized instructions to process per thread. Since instructions are stored as 32-bit integers, this value is multiplied by 8 to obtain the minimum total number of instructions processed on each thread for every step of the compilation process. For non-instruction-based steps, this value is approximated: when operating on nodes, it is divided by 4, as each node will generate up to 4 instructions, and when operating on functions it assumes every function is of an average size based on the total number of instructions and the number of functions present.
     \item \mono{-p} Aside from all logging happening on \mono{stderr}, this additionally prints all stage names and the number of nanoseconds taken in a CSV format to \mono{stdout}.
 \end{itemize}
@@ -565,6 +566,16 @@ Scripts have been provided for automated testing and data collection in the form
     \end{minted}
     \caption{Example invocation of the testing script}
     \label{lst:testsexec}
+\end{listing}
+
+Finally, the \mono{visualize.py} script is used for the automatic generation of the graphs and tables from the CSV output produces by the previous script. When invoked as shown in \autoref{lst:visualize}, it generates all graphs and tables in the specified root directory based on the specified input data.
+
+\begin{listing}[h]
+   \begin{minted}{bash}
+        ./visualize.py ./results.csv ./tex/figures
+   \end{minted}
+   \caption{Example invocation of the visualization generation script}
+   \label{lst:visualize}
 \end{listing}
 
 \newpage
