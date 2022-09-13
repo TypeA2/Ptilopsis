@@ -2,6 +2,8 @@
 tex/*
 !tex/*.tex
 !tex/*.pdf
+!tex/*.bib
+!tex/figures/.gitkeep
 
 *.exe
 *.bak

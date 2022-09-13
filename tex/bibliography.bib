@@ -1,0 +1,158 @@
+@inproceedings{
+    Zhang2020ParallelPS,
+    title={{Parallel} {Prefix} {Sum} with {SIMD}},
+    author={Wangda Zhang and Yanbin Wang and Kenneth Ross},
+    booktitle={ADMS@VLDB},
+    year={2020}
+}
+
+@mastersthesis{voetter2021,
+    author = {Robin Voetter},
+    title = {Parallel {Lexing}, {Parsing} and {Semantic} {Analysis} on the {GPU}},
+    school = {Leiden University},
+    year = {2021},
+}
+
+@mastersthesis{huijben2021,
+    author = {Marcel Huijben},
+    title = {Parallel {Code} {Generation} on the {GPU}},
+    school = {Leiden University},
+    year = {2021},
+}
+
+@inproceedings{pareas22,
+    author = {Voetter, Robin F. and Huijben, Marcel and Rietveld, Kristian F. D.},
+    title = {Compilation on the {GPU}? {A} {Feasibility} {Study}},
+    year = {2022},
+    isbn = {9781450393386},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    url = {https://doi.org/10.1145/3528416.3530249},
+    doi = {10.1145/3528416.3530249},
+    abstract = {The emergence of highly parallel architectures has led to a renewed interest in parallel compilation. In particular, the widespread availability of GPU architectures raises the question whether compilation on the GPU is feasible. In this paper, we describe the first design and implementation of a parallel compiler from a simple imperative programming language to RISC-V machine code, that is fully executed on a GPU. To accomplish this, all stages from parsing to machine code generation were redesigned to exploit fine-grained parallelism. Experimental evaluation of the implemented prototype demonstrates our proposed parallel techniques to be effective and implementation of compilation on the GPU to be feasible. Finally, we propose a number of avenues for future work and hope to revitalize research into parallel compilation conducted in the 1980s.},
+    booktitle = {Proceedings of the 19th ACM International Conference on Computing Frontiers},
+    pages = {230–236},
+    numpages = {7},
+    keywords = {GPUs, code generation, compiler construction, parallel compilation, parsing},
+    location = {Turin, Italy},
+    series = {CF '22}
+}
+
+@misc{
+    oneapi,
+    key={Intel oneAPI},
+    title={Intel {oneAPI} {Threading} {Building} {Blocks}},
+    howpublished={\url{https://www.intel.com/content/www/us/en/developer/tools/oneapi/onetbb.html}},
+    note={Accessed: 2022-09-03}
+}
+
+@misc{
+    win32threadpool,
+    key={Thread Pool API},
+    title={Win32 {Thread} {Pool} {API}},
+    howpublished={\url{https://docs.microsoft.com/en-us/windows/win32/procthread/thread-pool-api}},
+    note={Accessed: 2022-09-04}
+}
+
+@misc{
+    spinlock,
+    title={Correctly implementing a spinlock in {C++}},
+    author={Erik Rigtorp},
+    howpublished={\url{https://rigtorp.se/spinlock/}},
+    note={Accessed: 2021-12-15}
+}
+
+@misc{
+    intrinsics,
+    key={Intrinsics for Intel Advanced Vector Extensions 2 (Intel AVX2)},
+    title={Intrinsics for {Intel} {Advanced} {Vector} {Extensions} 2 ({Inte}l {AVX2})},
+    howpublished={\url{https://www.intel.com/content/www/us/en/develop/documentation/cpp-compiler-developer-guide-and-reference/top/compiler-reference/intrinsics/intrinsics-for-avx2.html}},
+    note={Accessed: 2022-09-05}
+}
+
+@misc{
+    intelcompiler,
+    key={Intel oneAPI DPC++/C++ Compiler},
+    title={Intel {oneAPI} {DP}{\Cpp}/{\Cpp} {Compiler}},
+    howpublished={\url{https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compiler.htm}},
+    note={Accessed: 2022-09-06}
+}
+
+@misc{
+    parallelgcc,
+    author={GNU},
+    title={Parallel {GCC}},
+    howpublished={\url{https://gcc.gnu.org/wiki/ParallelGcc}},
+    note={Accessed: 2022-09-06}
+}
+
+@article{vc,
+author = {Kretz, Matthias and Lindenstruth, Volker},
+title = {Vc: {A} {C++} library for explicit vectorization},
+journal = {Software: Practice and Experience},
+volume = {42},
+number = {11},
+pages = {1409-1430},
+keywords = {SIMD, C++, data-parallel, AVX, LRBni, SSE, optimization, Vc, vectorization},
+doi = {https://doi.org/10.1002/spe.1149},
+url = {https://onlinelibrary.wiley.com/doi/abs/10.1002/spe.1149},
+eprint = {https://onlinelibrary.wiley.com/doi/pdf/10.1002/spe.1149},
+abstract = {SUMMARY It is an established trend that CPU development takes advantage of Moore's Law to improve in parallelism much more than in scalar execution speed. This results in higher hardware thread counts (MIMD) and improved vector units (SIMD), of which the MIMD developments have received the focus of library research and development in recent years. To make use of the latest hardware improvements, SIMD must receive a stronger focus of API research and development because the computational power can no longer be neglected and often auto-vectorizing compilers cannot generate the necessary SIMD code, as will be shown in this paper. Nowadays, the SIMD capabilities are sufficiently significant to warrant vectorization of algorithms requiring more conditional execution than was originally expected for Streaming SIMD Extension to handle. The Vc library (http://compeng.uni-frankfurt.de/?vc) was designed to support developers in the creation of portable vectorized code. Its capabilities and performance have been thoroughly tested. Vc provides portability of the source code, allowing full utilization of the hardware's SIMD capabilities, without introducing any overhead. Copyright © 2011 John Wiley \& Sons, Ltd.},
+year = {2012}
+}
+
+@phdthesis{Kretz2015,
+  author      = {Matthias Kretz},
+  title       = {Extending {C++} for explicit data-parallel programming via {SIMD} vector types},
+  type        = {doctoralthesis},
+  pages       = {256},
+  school      = {Universit{\"a}tsbibliothek Johann Christian Senckenberg},
+  year        = {2015},
+}
+
+@inproceedings{futhark,
+author = {Henriksen, Troels and Serup, Niels G. W. and Elsman, Martin and Henglein, Fritz and Oancea, Cosmin E.},
+title = {Futhark: {Purely} {Functiona}l {GPU-Programming} with {Nested} {Parallelism} and {in-Place} {Array} {Updates}},
+year = {2017},
+isbn = {9781450349888},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3062341.3062354},
+doi = {10.1145/3062341.3062354},
+abstract = {Futhark is a purely functional data-parallel array language that offers a machine-neutral programming model and an optimising compiler that generates OpenCL code for GPUs. This paper presents the design and implementation of three key features of Futhark that seek a suitable middle ground with imperative approaches. First, in order to express efficient code inside the parallel constructs, we introduce a simple type system for in-place updates that ensures referential transparency and supports equational reasoning. Second, we furnish Futhark with parallel operators capable of expressing efficient strength-reduced code, along with their fusion rules. Third, we present a flattening transformation aimed at enhancing the degree of parallelism that (i) builds on loop interchange and distribution but uses higher-order reasoning rather than array-dependence analysis, and (ii) still allows further locality-of-reference optimisations. Finally, an evaluation on 16 benchmarks demonstrates the impact of the language and compiler features and shows application-level performance competitive with hand-written GPU code.},
+booktitle = {Proceedings of the 38th ACM SIGPLAN Conference on Programming Language Design and Implementation},
+pages = {556–571},
+numpages = {16},
+keywords = {functional language, parallel, GPGPU, compilers},
+location = {Barcelona, Spain},
+series = {PLDI 2017}
+}
+
+@book{compilerbook,
+author = {Aho, Alfred V. and Lam, Monica S. and Sethi, Ravi and Ullman, Jeffrey D.},
+title = {Compilers: {Principles}, {Techniques}, and {Tools} (2nd {Edition})},
+year = {2006},
+isbn = {0321486811},
+publisher = {Addison-Wesley Longman Publishing Co., Inc.},
+address = {USA}
+}
+
+@ARTICLE{flynn,  author={Flynn, M.J.},  journal={Proceedings of the IEEE},   title={Very high-speed computing systems},   year={1966},  volume={54},  number={12},  pages={1901-1909},  doi={10.1109/PROC.1966.5273}}
+
+@ARTICLE{flynn2,  author={Flynn, Michael J.},  journal={IEEE Transactions on Computers},   title={Some {Computer} {Organizations} and {Their} {Effectiveness}},   year={1972},  volume={C-21},  number={9},  pages={948-960},  doi={10.1109/TC.1972.5009071}}
+
+@inproceedings{Marr2002HyperThreadingTA,
+  title={Hyper-{Threading} {Technology} {Architecture} and {Microarchitecture} 1 {Hyper}-{Threading} {Technology} {Architecture} and {Microarchitecture}},
+  author={Deborah T. Marr and Frank Binns},
+  year={2002}
+}
+
+@INPROCEEDINGS{smt,  author={Tullsen, D.M. and Eggers, S.J. and Levy, H.M.},  booktitle={Proceedings 22nd Annual International Symposium on Computer Architecture},   title={Simultaneous multithreading: {Maximizing} on-chip parallelism},   year={1995},  volume={},  number={},  pages={392-403},  doi={}}
+
+@ARTICLE{haswell,  author={Hammarlund, Per and Martinez, Alberto J. and Bajwa, Atiq A. and Hill, David L. and Hallnor, Erik and Jiang, Hong and Dixon, Martin and Derr, Michael and Hunsaker, Mikal and Kumar, Rajesh and Osborne, Randy B. and Rajwar, Ravi and Singhal, Ronak and D'Sa, Reynold and Chappell, Robert and Kaushik, Shiv and Chennupaty, Srinivas and Jourdan, Stephan and Gunther, Steve and Piazza, Tom and Burton, Ted},  journal={IEEE Micro},   title={Haswell: {The} {Fourth}-{Generation} {Intel} {Core} {Processor}},   year={2014},  volume={34},  number={2},  pages={6-20},  doi={10.1109/MM.2014.10}}
+
+@MISC{Lomont11introductionto,
+    author = {Chris Lomont},
+    title = {Introduction to {Intel} {Advanced} {Vector} {Extensions}. {Intel} {White} {Paper}},
+    year = {2011}
+}
