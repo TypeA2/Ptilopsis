@@ -250,7 +250,13 @@ def plot(selected: TestResultArray, file: str, **kwargs) -> None:
 
     ax2 = ax.secondary_xaxis("bottom")
     ax2.set_xlabel("Configuration")
-    ax2.set_xticks(indices_arr, ["a"] * len(threads) + ["b"] * len(threads) + ["c"] * len(threads) + ["d"] * len(threads))
+    ax2.set_xticks(
+        indices_arr,
+        ["m0"] * len(threads) + ["bm0"] * len(threads) + ["m1"] * len(threads) + ["bm1"] * len(threads),
+        rotation=270
+    )
+
+    ax2.tick_params(axis="x", labelsize=5, pad=0)
 
     name = str(Path(file).stem)
 
