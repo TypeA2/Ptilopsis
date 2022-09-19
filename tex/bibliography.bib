@@ -86,6 +86,14 @@
     note={Accessed: 2022-09-06}
 }
 
+@misc{
+    kernelnuma,
+    key={NUMA},
+    title={NUMA},
+    howpublished={\url{https://www.kernel.org/doc/html/v5.4/vm/numa.html}},
+    note={Accessed: 2022-09-19}
+}
+
 @article{vc,
 author = {Kretz, Matthias and Lindenstruth, Volker},
 title = {Vc: {A} {C++} library for explicit vectorization},
@@ -155,4 +163,25 @@ address = {USA}
     author = {Chris Lomont},
     title = {Introduction to {Intel} {Advanced} {Vector} {Extensions}. {Intel} {White} {Paper}},
     year = {2011}
+}
+
+@article{SKILLICORN1993337,
+title = {Compiling in Parallel},
+journal = {Journal of Parallel and Distributed Computing},
+volume = {17},
+number = {4},
+pages = {337-352},
+year = {1993},
+issn = {0743-7315},
+doi = {https://doi.org/10.1006/jpdc.1993.1032},
+url = {https://www.sciencedirect.com/science/article/pii/S0743731583710324},
+author = {D.B. Skillicorn and D.T. Barnard},
+abstract = {Parallel compilation is an increasingly important application because of the availability of parallel hardware and the long running times of optimizing and parallelizing compilers. Because compilation is well understood theoretically, it is also a useful domain in which to investigate how parallel software is developed. We survey approaches to parallel compilation, ordering them by the architecture class to which they apply. They can be broadly divided into two classes. The first adapts existing sequential compilation techniques to architectures with moderate parallelism. Performance improvements are modest, perhaps a factor of 10 on 30 processors. The second approach is to use fundamentally new algorithms that can exploit massive parallelism. Performance improvements are encouraging, but only some aspects of compilation have been well studied.}
+}
+
+@phdthesis{hsu2019data,
+  title={A data parallel compiler hosted on the gpu},
+  author={Hsu, Aaron Wen-yao},
+  year={2019},
+  school={Indiana University}
 }
