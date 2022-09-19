@@ -275,9 +275,9 @@ def plot(selected: TestResultArray, file: str, **kwargs) -> None:
     global got_legend
     if not got_legend:
         got_legend = True
-        legend_fig = pylab.figure(figsize = (2, 1.5))
+        legend_fig = pylab.figure(figsize = cast(tuple[float], fig.get_size_inches()))
         handles, labels = ax.get_legend_handles_labels()
-        pylab.figlegend(handles[::-1], [names[n] for n in labels[::-1]], loc = "upper left")
+        pylab.figlegend(handles[::-1], [names[n] for n in labels[::-1]], loc = "center", fontsize = "xx-large")
         legend_fig.savefig(cast(str, outdir / "legend.pdf"))
 
     fig.savefig(cast(str, outdir / Path(file).with_stem(name).with_suffix(".pdf")), bbox_inches = "tight", pad_inches = 0)

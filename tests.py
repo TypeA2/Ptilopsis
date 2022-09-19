@@ -36,7 +36,7 @@ ptilopsis: Path = args.executable
 testdir: Path = args.testdir
 out: TextIO = args.outfile
 
-threads_to_test = [1, 2, 4, 8, 16, 32, 64, 96, 128, 160, 192, 224]
+threads_to_test = [1, 2, 4, 8, 16, 32, 48, 64, 96, 80, 128, 160, 192, 224]
 alt_block_to_test = [True, False]
 lock_types_to_test = [0, 1]
 
