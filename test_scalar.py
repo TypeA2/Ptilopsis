@@ -6,6 +6,7 @@ import sys
 import subprocess
 import time
 from pathlib import Path
+from typing import TextIO
 
 parser = argparse.ArgumentParser(description="Run tests for the Ptilopsis compiler backend")
 
@@ -17,8 +18,6 @@ def make_schema(p: Path) -> list[Path]:
         rel("./basic/3.in"),
         rel("./basic/4.in"),
         rel("./basic/5.in"),
-        rel("./basic/6.in"),
-        rel("./basic/7.in"),
         rel("./funclen/1.in"),
         rel("./funclen/2.in"),
         rel("./funclen/3.in"),
@@ -26,13 +25,7 @@ def make_schema(p: Path) -> list[Path]:
         rel("./funclen/5.in"),
         rel("./funclen/6.in"),
         rel("./funclen/7.in"),
-        rel("./funclen/8.in"),
-        rel("./shape/1.in"),
-        rel("./shape/2.in"),
-        rel("./shape/3.in"),
-        rel("./shape/4.in"),
-        rel("./shape/5.in"),
-        rel("./shape/6.in"),
+        rel("./funclen/8.in")
     ]
 
 def executable(p) -> Path:
@@ -60,39 +53,38 @@ def dir(p) -> Path:
 
 parser.add_argument("executable", type=executable, help="Ptilopsis executable to use")
 parser.add_argument("testdir", type=dir, help="Directory containing test files")
+parser.add_argument("outfile", type=argparse.FileType("w", encoding="utf-8"), help="File to write output to")
 
 args, unknown = parser.parse_known_args()
 
 ptilopsis: Path = args.executable
 testdir: Path = args.testdir
+out: TextIO = args.outfile
 schema: list[Path] = make_schema(testdir)
 runs = 15
 
 print(f"{runs} run(s)", file=sys.stderr)
 
-digits = len(str(runs))
+with out:
+    for file in schema:
+        procs: list[subprocess.Popen] = []
+        print(f" > {file.relative_to(testdir)}...")
+        for i in range(runs):
+            argv: list[str | Path] = [
+                ptilopsis,
+                "-p", "-s",
+                "-o", os.devnull,
+                file
+            ]
 
-for file in schema:
-    for i in range(runs):
-        print(f"> {file.relative_to(testdir)}  ->  {str(i + 1).ljust(digits, ' ')} / {runs}...", file=sys.stderr, end="")
-        argv: list[str | Path] = [
-            ptilopsis,
-            "-p",
-            "-o", os.devnull,
-            file,
-            *unknown
-        ]
+            procs.append(subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8"))
 
-        start = time.time()
-        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
-        stdout, _ = proc.communicate()
+        for proc in procs:
+            stdout, _ = proc.communicate()
 
-        elapsed = time.time() - start
-        print(f" {elapsed} seconds", file=sys.stderr)
+            rows: list[str] = stdout.split("\n")
+            header: list[str] = rows[0].split(",")
+            counts: list[int] = list(map(int, rows[1].split(",")))
 
-        rows: list[str] = stdout.split("\n")
-        header: list[str] = rows[0].split(",")
-        counts: list[int] = list(map(int, rows[1].split(",")))
-
-        print(f"{file.relative_to(testdir)},{counts}")
-        sys.stdout.flush()
+            out.write(f"{file.relative_to(testdir)},{counts}\n")
+            out.flush()
