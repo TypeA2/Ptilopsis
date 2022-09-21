@@ -475,7 +475,7 @@ Additional optimizations may be done in addressing problems caused by the CPU ar
 \appendix
 
 \section{AST Reference} \label{ast}
-The Ptilopsis AST uses the same nodes types and data types as Pareas. The main difference is that all fields are stores as 32-bit integers to help with AVX2-based processing. Despite this, only the lower 8 bits are actually used currently, but this can theoretically be expanded to use all available bits. Three classes of nodes have also been given special bit patterns to allow for faster processing. These three classes are:
+The Ptilopsis AST uses the same nodes types and data types as Pareas. The main difference is that all fields are stored as 32-bit integers to help with AVX2-based processing. Despite this, only the lower 8 bits are actually used currently, but this can theoretically be expanded to use all available bits. Three classes of nodes have also been given special bit patterns to allow for faster processing. These three classes are:
 \begin{itemize}
     \item Conditional (\icpp{if}, \icpp{if}/\icpp{else} and \icpp{while})
     \item Comparisons (\mono{==}, \mono{!=}, \mono{<}, \mono{>}, \mono{<=}, \mono{>=})
