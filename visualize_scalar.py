@@ -128,7 +128,13 @@ schema = [
     "funclen/5.in",
     "funclen/6.in",
     "funclen/7.in",
-    "funclen/8.in"
+    "funclen/8.in",
+    "shape/1.in",
+    "shape/2.in",
+    "shape/3.in",
+    "shape/4.in",
+    "shape/5.in",
+    "shape/6.in",
 ]
 
 basic_size = [
@@ -137,6 +143,10 @@ basic_size = [
 
 funclen_count = [
     25118, 12495, 6181, 2513, 1539, 497, 251, 100
+]
+
+shape_depth = [
+    9, 19, 34, 36, 42, 49
 ]
 
 basic_scaling = [ 1, 2, 20, 100, 200, 2000, 10000 ]
@@ -170,6 +180,7 @@ plt.rcParams.update({
 
 schema_basic = list(filter(lambda t: t.startswith("basic"), schema))
 schema_funclen = list(filter(lambda t: t.startswith("funclen"), schema))
+schema_shape = list(filter(lambda t: t.startswith("shape"), schema))
 
 plot_basic_scalar: list[float] = []
 plot_basic_avx: list[float] = []
@@ -221,12 +232,32 @@ plot_funclen_pareas = [
     (216.65+230.40)/2
 ]
 
+plot_shape_avx: list[float] = []
+plot_shape_st: list[float] = []
+for file in schema_shape:
+    if avx_avg := values_avx.filter(lambda t: t.infile == file).average():
+        plot_shape_avx.append(avx_avg.total_time() / 1e6)
+
+    if avx_avg := values_avx_st.filter(lambda t: t.infile == file).average():
+        plot_shape_st.append(avx_avg.total_time() / 1e6)
+shape_first_avg = (plot_shape_avx[0] + plot_shape_st[0]) / 2
+plot_shape_linear: list[float] = list(map(lambda v: v* shape_first_avg, shape_depth))
+plot_shape_pareas = [
+    78.87,
+    957.584,
+    45568.068,
+    121399.471,
+    110620.601,
+    97193.301
+]
+
 fig, ax = plt.subplots()
-ax.plot(basic_size, plot_basic_avx, marker="o", label="SIMD (32 threads)", color="xkcd:azure")
-ax.plot(basic_size, plot_basic_avx_st, marker="o", label="SIMD (1 thread)", color="xkcd:blue")
+ax.plot(basic_size, plot_basic_linear, linestyle="--", label="Linear scaling", color="xkcd:grey")
 ax.plot(basic_size, plot_basic_pareas, marker="o", linestyle="--", label="Pareas (RTX3090)", color="xkcd:green")
 ax.plot(basic_size[:len(plot_basic_scalar)], plot_basic_scalar, marker="o", label="Scalar", color="xkcd:red")
-ax.plot(basic_size, plot_basic_linear, linestyle="--", label="Linear scaling", color="xkcd:grey")
+ax.plot(basic_size, plot_basic_avx_st, marker="o", label="SIMD (1 thread)", color="xkcd:blue")
+ax.plot(basic_size, plot_basic_avx, marker="o", label="SIMD (32 threads)", color="xkcd:azure")
+
 ax.set_yscale("log", base=10)
 ax.set_xscale("log", base=10)
 ax.set_xlabel("Input Size (bytes)")
@@ -235,17 +266,19 @@ ax.set_ylabel("Total Execution Time (ms)")
 ax.tick_params(axis="both", which="both", direction="in")
 ax.tick_params(axis="both", which="both", right=True, top=True)
 
-ax.legend(loc="upper left")
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], loc="upper left")
 fig.savefig(cast(str, outdir / Path("basic_scalar.pdf")), bbox_inches = "tight", pad_inches = 0.1)
 
 plt.close()
 
 fig, ax = plt.subplots()
-ax.plot(funclen_count, plot_funclen_avx, marker="o", label="SIMD (32 threads)", color="xkcd:azure")
-ax.plot(funclen_count, plot_funclen_avx_st, marker="o", label="SIMD (1 thread)", color="xkcd:blue")
+ax.plot(funclen_count, plot_funclen_linear, linestyle="--", label="Linear scaling", color="xkcd:grey")
 ax.plot(funclen_count, plot_funclen_pareas, linestyle="--", marker="o", label="Pareas (RTX3090)", color="xkcd:green")
 ax.plot(funclen_count, plot_funclen_scalar, marker="o", label="Scalar", color="xkcd:red")
-ax.plot(funclen_count, plot_funclen_linear, linestyle="--", label="Linear scaling", color="xkcd:grey")
+ax.plot(funclen_count, plot_funclen_avx_st, marker="o", label="SIMD (1 thread)", color="xkcd:blue")
+ax.plot(funclen_count, plot_funclen_avx, marker="o", label="SIMD (32 threads)", color="xkcd:azure")
+
 ax.set_yscale("log", base=10)
 ax.set_xscale("log", base=2)
 ax.set_xlabel("Function Count")
@@ -256,5 +289,26 @@ ax.set_xticks(funclen_count, funclen_count)
 ax.tick_params(axis="both", which="both", direction="in")
 ax.tick_params(axis="both", which="both", right=True, top=True)
 
-ax.legend(loc="center right")
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], loc="center right")
 fig.savefig(cast(str, outdir / Path("funclen_scalar.pdf")), bbox_inches = "tight", pad_inches = 0.1)
+
+plt.close()
+fig, ax = plt.subplots()
+ax.plot(shape_depth, plot_shape_linear, linestyle="--", label="Linear scaling", color="xkcd:grey")
+ax.plot(shape_depth, plot_shape_pareas, marker="o", linestyle="--", label="Pareas (RTX3090)", color="xkcd:green")
+ax.plot(shape_depth, plot_shape_st, marker="o", label="SIMD (1 thread)", color="xkcd:blue")
+ax.plot(shape_depth, plot_shape_avx, marker="o", label="SIMD (32 threads)", color="xkcd:azure")
+
+ax.set_yscale("log", base=10)
+ax.set_xlabel("AST Depth")
+ax.set_ylabel("Total Execution Time (ms)")
+
+ax.set_xticks(shape_depth, shape_depth)
+
+ax.tick_params(axis="both", which="both", direction="in")
+ax.tick_params(axis="both", which="both", right=True, top=True)
+
+handles, labels = ax.get_legend_handles_labels()
+ax.legend(handles[::-1], labels[::-1], loc="upper left")
+fig.savefig(cast(str, outdir / Path("shape.pdf")), bbox_inches = "tight", pad_inches = 0.1)

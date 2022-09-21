@@ -27,7 +27,7 @@
 \newcommand{\specialcell}[2][c]{%
   \begin{tabular}[#1]{@{}c@{}}#2\end{tabular}}
   
- \newcommand{\helpme}[1]{{\color{red}#1}}
+ % \newcommand{\helpme}[1]{{\color{red}#1}}
   
 \newcommand{\bigcomment}[1]{}
 
@@ -91,7 +91,7 @@ Compilers serve a vital part in software development, as these programs are what
 
 Previous work described Pareas \cite{voetter2021} \cite{huijben2021} \cite{pareas22}, a parallel compiler running on a GPU written in Futhark \cite{futhark}. Due to the SIMT nature of GPU architectures, it is not suitable to simply run each step of the compiler in parallel or to run multiple instances of the compiler. Therefore, the steps a traditional compiler uses to achieve the described transformation were redesigned to be more efficiently parallelized for execution on a highly parallel processor such as a GPU. These efforts resulted in a very high total throughput, especially for large input files.
 
-In this thesis, we investigate the effectiveness of applying this same modified transformation using SIMD and running on a multi-core CPU. To do so, we describe Ptilopsis, a compiler backend based on Pareas, which transforms a previously generated abstract syntax tree into binary RISC-V code in a parallel manner. The backend was specifically chosen for investigation because of its reliance on many similar operations, in this case, tree walk operations. For the implementation of Pareas conventional pointer-based tree operations were modified into operations on contiguous data representing the AST as what is effectively a parent point tree, stored in array form, called an inverted tree. For Ptilopsis, these operations were adapted to work on a conventional CPU using AVX2 intrinsics \cite{intrinsics} and multiple CPU threads.
+In this thesis, we investigate the effectiveness of applying these same modified compiler steps using SIMD while running on a multi-core CPU. To do so, we describe Ptilopsis, a compiler backend based on Pareas, which transforms a previously generated abstract syntax tree into binary RISC-V code in a parallel manner. The backend was specifically chosen for investigation because of its reliance on many similar operations, in this case, tree walk operations. For the implementation of Pareas conventional pointer-based tree operations were modified into operations on contiguous data representing the AST as what is effectively a parent point tree, stored in array form, called an inverted tree. For Ptilopsis, these operations were adapted to work on a conventional CPU using AVX2 intrinsics \cite{intrinsics} and multiple CPU threads.
 
 Ptilopsis is available on GitHub at \url{https://github.com/TypeA2/Ptilopsis}.
 
@@ -288,7 +288,7 @@ As noted previously, a major functionality missing from AVX2 is the scatter prim
 
 A major challenge was dealing with conditionals and AVX2. Generally, masks are used to only modify elements that we intend to modify, but this does suffer from the same problem that GPUs exhibit, where some units are effectively idle because their specific assigned element is skipped by the conditional. An attempt has been made to minimize this by not executing certain branches entirely when no element of the mask is set. Despite this, whenever a branch occurs in the AVX2 code, there is a high likelihood that some elements are excluded, leading to an effective decrease in parallelization.
 
-While multithreading does increase core utilization, it does bring overhead. Setting up each thread's task can be costly, and locking efficiently is not trivial. As such, not every step possible has been made multithreaded, as some steps did not pose a significant bottleneck in the entire process, even at the largest tested input size of 50MB, and the performance gained by the parallelization of these steps would not make up for the additional overhead introduces by distributing the work over multiple threads.
+While multithreading does increase core utilization, it does bring overhead. Setting up each thread's task can be costly, and locking efficiently is not trivial. As such, not every step possible has been made multithreaded, as some steps did not pose a significant bottleneck in the entire process, even at the largest tested input size of 50MB, and the performance gained by the parallelization of these steps would not make up for the additional overhead introduced by distributing the work over multiple threads.
 
 \section{Experiments} \label{experiments}
 
@@ -333,7 +333,7 @@ Complete details on reproducing the experiments can be found in \autoref{setup}.
 Only binaries of Ptilopsis that were built using the GCC toolchain respect the specified thread count, since some parallelism is implemented using the parallel variants of \Cpp STL algorithms like \icpp{std::sort}. These algorithms do not expose an API for limiting the number of threads used. When built using GCC, the compiler uses a backend based on the Intel oneAPI TBB \cite{oneapi}, which can easily be manipulated into limiting the number of total threads. Since no such API exists when compiled using MSVC, this will always use the automatic thread count decided by the Windows Thread Pool API \cite{win32threadpool}.
 
 \subsection{File Size} \label{filesize}
-This experiment contains 7 input files, that yield ASTSs which all have the same height but an increasing number of nodes and functions. Starting from 1, the total sizes of these input files are roughly 5 KiB, 10 KiB, 100 KiB, 500 KiB, 1 MiB, 10 MiB, and 50 MiB. These test files are structured to be relatively similar to usual real source files, with multiple functions of limited size, and somewhat deep nesting of expressions, leading to a limited, but not a low, total height for the resulting AST.
+This experiment contains 7 input files, that yield ASTs which all have the same height but an increasing number of nodes and functions. Starting from 1, the total sizes of these input files are roughly 5 KiB, 10 KiB, 100 KiB, 500 KiB, 1 MiB, 10 MiB, and 50 MiB. These test files are structured to be relatively similar to usual real source files, with multiple functions of limited size, and somewhat deep nesting of expressions, leading to a limited, but not a low, total height for the resulting AST.
 
 \autoref{fig:basic_limit} shows the results for a small and a medium-sized test file. Because of the significantly worse performance at high thread counts, the full results for configurations \mono{c} and \mono{d} are not shown here, but these can be seen in \autoref{results}.
 
@@ -344,8 +344,6 @@ From these graphs, we can conclude that at small input file sizes, the overhead 
 In addition to the overall runtime, we can see that, on large input files, parallelization of the register allocation step yields large improvements, while the optimization stage improves moderately and the instruction generation step quite poorly.
 
 It is notable that when using 32 or more threads on small input files, the total execution time starts increasing. This is possibly caused by our testing system being equipped with 2 physical CPUs, leading to performance regression when a task is not running solely on a single physical CPU due to memory access latency.
-
-\helpme{drogium contains 2 NUMA nodes, Zen 2 Epycs contain 8 CPU chiplets in pairs, see email for details}
 
 \begin{figure}[!ht]
     \centering
@@ -368,14 +366,14 @@ The second set of experiment files contains 8 input files with roughly the same 
     \subcaptionbox{2513 functions}{\includegraphics[width=0.49\textwidth]{figures/funclen/4_limit_y.pdf}}
     \subcaptionbox{100 functions}{\includegraphics[width=0.49\textwidth]{figures/funclen/8_limit_y.pdf}}
     \includegraphics[width=0.49\textwidth]{figures/legend.pdf}
-    \caption{Partial data showing the execution time of 3 input files, each with a different number of total functions}
+    \caption{Partial data showing the execution time of 3 input files with a differing total number of functions}
     \label{fig:funclen_limit}
 \end{figure}
 
 Unlike in \autoref{filesize}, the difference multithreading makes is small, with the biggest improvement visible when a very high number of functions are compiled. When the number of total functions shrinks, the benefit provided by multithreading is reduced. Despite this, we can see that multithreading is most effective in the register allocation step when a high number of functions are present. The instruction generation step sees moderate performance improvement with more threads but seems to be mostly unaffected by the total number of functions present. These results are expected, since instruction generation schedules all instructions based on their level in the AST, regardless of what function they belong to. This is not the case for register allocation, and as such, this step is more affected by a change in the total number of functions.
 
 \subsection{Shape} \label{shape}
-The final set of experiment files contains 6 files with corresponding maximum AST depths of 9, 19, 34, 36, 42, and 49. Since function nodes are always located at the second level of the AST, a deeper AST leads to significantly larger functions. \autoref{fig:shape_limit} shows the results for a relatively shallow AST, a moderately deep AST, and a very deep AST. Based on these results we can conclude that, while the instruction generation step is not significantly affected by the depth of the AST, the register allocation step is the main contributor to a high execution time with a very deep AST as input. Since the parallelism of this step is bound by the number of functions, and deeper ASTs necessarily mean larger functions when the total number of functions remains roughly equal, this result is expected as there is less achievable parallelism in large functions.
+The final set of experiment files contains 6 files with corresponding maximum AST depths of 9, 19, 34, 36, 42, and 49. Since function nodes are always located at the second level of the AST, a deeper AST leads to significantly larger functions. \autoref{fig:shape_limit} shows the results for a relatively shallow AST, a moderately deep AST, and a very deep AST. Based on these results we can conclude that, while the instruction generation step is not significantly affected by the depth of the AST, the register allocation step is the main contributor to a high execution time with a very deep AST as input. Since the parallelism of this step is bound by the number of functions, and deeper ASTs necessarily mean larger functions when the total number of functions remains roughly equal, this result is expected as there is less parallelism achievable in large functions.
 
 Based on the results it is also clear that multithreading significantly speeds up this step relative to a single-threaded approach, but the total execution still takes very long on average with very deep ASTs, despite the test files themselves being of similar size.
 
@@ -389,21 +387,17 @@ Based on the results it is also clear that multithreading significantly speeds u
     \label{fig:shape_limit}
 \end{figure}
 
-\subsection{Discussion} \label{discussion}
-\subsubsection{Compared to Pareas}
+\subsection{Comparison to Pareas} \label{discussion}
 
 Because of the similarity between Pareas and Ptilopsis, it is possible to use the same files to benchmark them and compare the results to the original results obtained in \cite{huijben2021}.
 
-Pareas was run on an NVIDIA RTX 3090, with 10496 cores and 24GiB of memory, with a bandwidth of 936.2GB/s. Ptilopsis was run on a dual Epyc 7702 system, featuring 64 cores and 128 threads along with 204.8GB/s of memory bandwidth per socket, configured as 2 NUMA nodes. However, it usually performed best when running using 16 or 32 threads, with significant performance regressions when using 64 or more threads. Since the Linux scheduler is NUMA-aware \cite{kernelnuma}, it will attempt to schedule our threads on the same node. At 64 threads, we exceed the number of physical cored per node, so there is a high likelihood that a thread may be scheduled on a physical core of a different node, and this is reflected in our result. Further investigation could be done into the effects of pinning the threads on a single node.
-\helpme{more NUMA woes}
+Pareas was run on an NVIDIA RTX 3090, with 10496 cores and 24GiB of memory, with a bandwidth of 936.2GB/s. Ptilopsis was run on a dual Epyc 7702 system, featuring 64 cores and 128 threads along with 204.8GB/s of memory bandwidth per socket, configured as 2 NUMA nodes. However, it usually performed best when running using 16 or 32 threads, with significant performance regressions when using 64 or more threads. Since the Linux scheduler is NUMA-aware \cite{kernelnuma}, it will attempt to schedule our threads on the same node. At 64 threads, we exceed the number of physical cores per node, so there is a high likelihood that a thread may be scheduled on a physical core of a different node, and this is reflected in our result. Further investigation could be done into the effects of pinning the threads on a single node.
 
 Overall, as was discussed in previous sections, the CPU is better suited for some parts of the compilation process. Specifically, register allocation benefits from the MIMD nature of a multi-core CPU, since branching is not as expensive. Conversely, a SIMT system like a GPU is better suited to processing many individual elements, which is what most other steps of the compilation process consist of. The previously tested workloads are discussed in detail below.
 
 \subsubsection*{File size}
 
 \autoref{fig:scaling_basic} shows the total execution time for different input sizes for Ptilopsis, showing both the AVX2 implementation, and the scalar implementation, compared to that of Pareas. This shows superlinear scaling based on input size for the scalar implementation, as well as roughly linear scaling for the AVX2 implementation and sublinear scaling for Pareas. At low input file sizes, the usage of 32 threads hurts performance. This is expected and was previously discussed in \autoref{filesize}. This effect decreases as the filesize increases, and once the filesize reaches 100 KiB the scaling shows the same characteristics as when using only 1 thread. This is in contrast to Pareas, which performs significantly worse at low filesize, but scales in a sublinear fashion. It is notable that, except for an outlier result at an input size of 1 MiB, the scaling of Pareas across the full range of input files looks similar to that of Ptilopsis when using multiple threads on the smallest four input files. However, there is not enough data on the performance of Pareas on even larger filesizes to confirm this.
-
-\helpme{speculation?}
 
 \begin{figure}[ht]
     \centering
@@ -418,13 +412,9 @@ Because of the poor parallelization, register allocation on Pareas takes a dispr
 
 \autoref{fig:scaling_funclen} shows the total execution time for a different number of functions with a similar total size for Ptilopsis, again showing the AVX2 and the scalar implementation, compared to that of Pareas. With decreasing function length, and thus increasing total function count, all of the implementations in Ptilopsis initially show a slight execution time decrease, before this starts increasing again. Pareas on the other hand exhibit a significant decrease in total execution time as the number of functions increases, with a slight increase again near the upper end of the tested function counts. In both cases, an increased number of functions means better parallelism, but the optimal number for Pareas seems to be a lot higher than that of Ptilopsis.
 
-A core part of the register allocation process is copying over the current state of all registers of all functions assigned to the current thread. This is bandwidth-limited, and as such, when a smaller number of total functions exist, the total amount of data that needs to be copied for this step is lower, leading to a speed-up instead of a slow-down when fewer functions are present, despite the achieved levels of parallelism being lower. 
+To explain the difference between Ptilopsis and Pareas, we speculate that memory bandwidth during the register allocatio may play a role. An important part of this stage is copying over the current state of all registers of all functions assigned to the current thread. This is bandwidth-limited, and as such, when a smaller number of total functions exist, the total amount of data that needs to be copied for this step is lower, leading to a speed-up instead of a slow-down when fewer functions are present, despite the achieved levels of parallelism being lower.
 
-\helpme{Should this speculation be mentioned?}
-
-\helpme{speculation: for both input size and funclen, the shape of Pareas across the entire range is similar to the shape of the lowest 3 or 4 input files for Ptilopsis}
-
-\helpme{more speculation: Pareas' execution time starts to increase between 6000 and 12000, the total number of cores is 10496, could be related? May not be as singlethreaded Ptilopsis (scalar and AVX) show the same behavior. However, 32 threads process 32 * 8 = 256 functions at a time, which lines up with a slight dip at 251 functions (maybe this is worth mentioning either way). The optimal level of parallelism (256 and 10496 for CPU and GPU) seems to offer the lowest execution time, with more and less being slightly slower}
+Further analysis may be needed to determine what causes the observed minimum execution times for both Pareas and Ptilopsis, and whether the observed scaling pattern holds for inputs with a higher number of functions.
 
 \begin{figure}[ht]
     \centering
@@ -434,16 +424,21 @@ A core part of the register allocation process is copying over the current state
 \end{figure}
 
 \subsubsection*{Shape}
-With this type of input file, both Pareas and Ptilopsis exhibit very similar behavior. For both compilers, the register allocation step is the main bottleneck, which becomes more noticeable at higher AST depths. As the depth of the AST increases, every function also grows in size. Since register allocation is bound by the total number of functions, not the size of these functions, this leads to a bottleneck.
+With this type of input file, \autoref{fig:scaling_shape} both Pareas and Ptilopsis exhibit very similar behavior as the AST depth increases.. As shown in \autoref{fig:shape_limit}, the register allocation step is the main bottleneck for deeper ASTs, which mimics behavior seen with Pareas. As the depth of the AST increases, every function also grows in size. Since the parallelization of the register allocation stage is bound by the total number of functions, not the size of these functions, this leads to a bottleneck.
 
 Interestingly, input files 4, 5, and 6 take nearly the same amount of time on a single CPU thread as on the GPU, input file 3 performs slightly faster, but input files 1 and 2 perform significantly slower.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[scale=0.8]{figures/shape.pdf}
+    \caption{Comparison of scaling on AST depth for singlethreaded AVX2, multithreaded AVX2 and Pareas}
+    \label{fig:scaling_shape}
+\end{figure}
 
 \subsubsection{Scalar Implementation}
 Both \autoref{fig:scaling_basic} and \autoref{fig:scaling_funclen} contain data points for the provided purely scalar implementation. Due to the superlinear scaling based on the input size, only the first 5 test files were tested in the former. Still, this serves to compare the AVX2 implementation to a naive reimplementation of Pareas on a CPU.
 
 This scalar implementation is significantly slower in every situation than all other tested implementations. Additionally, it shows a significantly different scaling based on input size than both Pareas and Ptilopsis' AVX2 implementations. Despite this, the scaling is very similar in terms of the total number of functions to that of the AVX2 implementations. This indicates that in this situation, the bottleneck in both cases is likely related to something inherent to running on the CPU. As mentioned in \autoref{compare_funclen}, given the reliance of the register allocation step on copying memory, memory bandwidth constraints are a likely cause.
-
-\helpme{Speculation, but fits in with previously discussed points}
 
 \section{Scalability and limitations}
 Generally, we can see that increasing the number of threads allocated to all tasks brings some improvements in total execution time, but these improvements do not scale linearly in most cases. The exception to this is on very deep ASTs, as tested in \autoref{shape}. This is because in this case, the main bottleneck is register allocation, which scales quite well with multiple cores as long as the number of functions stays the same.
@@ -461,13 +456,15 @@ Currently, Ptilopsis uses AVX2, emulating more complicated constructs using thes
 \subsubsection*{Cache}
 Our results show that when each thread processes multiple adjacent elements instead of the default ordering, a modest speedup may be observed. The current implementation does not take CPU data- or instruction-caching into account, while this has previously been shown to be able to significantly improve the performance of many CPU applications. Further research could be done into how these factors may affect SIMD applications operating on such large arrays of data.
 
+\newpage
+
 \subsubsection*{Futhark}
 As previously mentioned, Futhark is particularly suited to parallel data processing, while \Cpp can be difficult to work with when attempting this. Futhark natively supports translating Futhark code into multiple different languages. It should be possible to create one such backend of the Futhark compiler that outputs explicitly parallel SIMD code instead of the sequential C code the C backend outputs. This may prove to be easier than getting similar multithreaded and SIMD code generation functionality to work in \Cpp, and it may also provide some avenues for further optimization.
 
 \section{Conclusion} \label{conclusion}
-In this thesis, we adapted previous work in parallel code generation on GPU architectures to work on conventional multi-core CPUs. efficiently transforming an AST into machine code on a GPU to work on a CPU using multiple threads and SIMD instructions. The Ptilopsis compiler uses AVX2 instructions and multiple CPU threads to generate machine code from a previously generated syntax tree, using a set of compiler stages previously designed to implement a compiler running on GPU architectures.
+In this thesis, we adapted previous work in parallel code generation on GPU architectures to work on conventional multi-core CPUs. The Ptilopsis compiler uses AVX2 instructions and multiple CPU threads to generate machine code from a previously generated syntax tree, using a set of compiler stages previously designed to implement a compiler running on GPU architectures.
 
-The performance using multiple configurations was measured, and we found that it can outperform a GPU-based compiler on smaller inputs, but that these benefits diminish if the input allows the GPU to better take advantage of its level of parallelism. Based on the measured results, the compiler generally exhibits the lowest total runtime when running on a modest amount of threads, between 8 and 48, with a modest to high number of threads showing significant slowdown on small inputs due to extra work required for distributing work across all threads. We found that performance is affected by memory bandwidth and, more importantly, memory latency, as spreading work across multiple CPUs with a high relatively high latency interconnect shows slowdowns disproportionate to the overhead of simply running more threads. Finally, we found different performance characteristics compared to a GPU-based implementation. The GPU implementation performs worse when the input is small, but the total execution time does not grow as fast as on the CPU, meaning very large inputs will perform better on a GPU-based implementation. Bottlenecks were also different, partially caused by the difference in memory bandwidth and different options for efficient memory usage, leading to the register allocation stage making up a smaller part of the total execution time, but other stages taking proportionally longer to execute.
+The performance using multiple configurations was measured, and we found that it can outperform a GPU-based compiler on smaller inputs, but that these benefits diminish if the input allows the GPU to better take advantage of its level of parallelism. Based on the measured results, the compiler generally exhibits the lowest total runtime when running on a modest amount of threads, between 8 and 48, with a modest to high number of threads showing significant slowdown on small inputs due to extra work required for distributing work across all threads. We found that performance is affected by memory bandwidth and, more importantly, memory latency, as spreading work across multiple CPUs with a relatively high latency interconnect shows slowdowns disproportionate to the overhead of simply running more threads. Finally, we found different performance characteristics compared to a GPU-based implementation. The GPU implementation performs worse when the input is small, but the total execution time does not grow as fast as on the CPU, meaning very large inputs will perform better on a GPU-based implementation. Bottlenecks were also different, partially caused by the difference in memory bandwidth and different options for efficient memory usage, leading to the register allocation stage making up a smaller part of the total execution time, but other stages taking proportionally longer to execute.
 
 Additional optimizations may be done in addressing problems caused by the CPU architecture, such as memory bandwidth and latency, as well as cache usage and thread synchronization. Further work can also be done in making programming for multiple threads using SIMD easier, potentially using AVX-512 or a purpose-built language such as Futhark. 
 
@@ -544,7 +541,6 @@ The resulting executable will be placed in the specified \mono{builddir} and wil
     \item \mono{-b} When passed, use an alternate ordering of each thread's work to potentially improve caching effects.
     By default, when using a total of $x$ threads, operating on $y$ data elements, given a thread's index $i$, each thread processes the elements at index $e = i + n \cdot x$ for $n \geq 0$ while $e < y$
     With \mono{-b}, each thread instead processes $n = \lceil y / x \rceil$ adjacent elements, starting at index $i \cdot n$. Due to spatial locality of the data, this can improve performance.
-    \helpme{TODO is this worth using? we have a lot of data}
     \item \mono{-i <mininstr>} The minimum number of 256-bit vectors of finalized instructions to process per thread. Since instructions are stored as 32-bit integers, this value is multiplied by 8 to obtain the minimum total number of instructions processed on each thread for every step of the compilation process. For non-instruction-based steps, this value is approximated: when operating on nodes, it is divided by 4, as each node will generate up to 4 instructions, and when operating on functions it assumes every function is of an average size based on the total number of instructions and the number of functions present.
     \item \mono{-p} Aside from all logging happening on \mono{stderr}, this additionally prints all stage names and the number of nanoseconds taken in a CSV format to \mono{stdout}.
 \end{itemize}
