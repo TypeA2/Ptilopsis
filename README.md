@@ -2,6 +2,8 @@
 
 SIMD-based Pareas derivative.
 
+Source code for Pareas, which Ptilopsis is based on, can be found at [https://github.com//Snektron/pareas](https://github.com//Snektron/pareas)
+
 ## Building
 
 pareas-ast is modified to produce a static library, which is linked to this project.
